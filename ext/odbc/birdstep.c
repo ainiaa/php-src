@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -32,11 +32,10 @@
 
 #if WIN32
 # include "config.w32.h"
-# include "win95nt.h"
 # ifdef PHP_EXPORTS
-#  define PHPAPI __declspec(dllexport) 
+#  define PHPAPI __declspec(dllexport)
 # else
-#  define PHPAPI __declspec(dllimport) 
+#  define PHPAPI __declspec(dllimport)
 # endif
 #else
 # include <php_config.h>
@@ -118,9 +117,9 @@ const zend_function_entry birdstep_functions[] = {
 	PHP_FE(birdstep_fieldnum,       arginfo_birdstep_fieldnum)
 	PHP_FE(birdstep_fieldname,      arginfo_birdstep_fieldname)
 /*
- * Temporary Function aliases until the next major upgrade to PHP.  
- * These should allow users to continue to use their current scripts, 
- * but should in reality warn the user that this functionality is 
+ * Temporary Function aliases until the next major upgrade to PHP.
+ * These should allow users to continue to use their current scripts,
+ * but should in reality warn the user that this functionality is
  * deprecated.
  */
 	PHP_FALIAS(velocis_connect,        birdstep_connect,        arginfo_birdstep_connect)
@@ -136,7 +135,7 @@ const zend_function_entry birdstep_functions[] = {
 	PHP_FALIAS(velocis_fieldnum,       birdstep_fieldnum,       arginfo_birdstep_fieldnum)
 	PHP_FALIAS(velocis_fieldname,      birdstep_fieldname,      arginfo_birdstep_fieldname)
 /* End temporary aliases */
-	{NULL, NULL, NULL}
+	PHP_FE_END
 };
 
 zend_module_entry birdstep_module_entry = {
@@ -148,7 +147,7 @@ zend_module_entry birdstep_module_entry = {
 	PHP_RINIT(birdstep),
 	NULL,
 	PHP_MINFO(birdstep),
-	NO_VERSION_YET,
+	PHP_BIRDSTEP_VERSION,
 	STANDARD_MODULE_PROPERTIES
 };
 
@@ -159,9 +158,9 @@ ZEND_GET_MODULE(birdstep)
 THREAD_LS birdstep_module php_birdstep_module;
 THREAD_LS static HENV henv;
 
-#define PHP_GET_BIRDSTEP_RES_IDX(id) if (!(res = birdstep_find_result(list, id))) { php_error_docref(NULL, E_WARNING, "Birdstep: Not result index (%ld)", id); RETURN_FALSE; } 
+#define PHP_GET_BIRDSTEP_RES_IDX(id) if (!(res = birdstep_find_result(list, id))) { php_error_docref(NULL, E_WARNING, "Birdstep: Not result index (%ld)", id); RETURN_FALSE; }
 #define PHP_BIRDSTEP_CHK_LNK(id) if (!(conn = birdstep_find_conn(list, id))) { php_error_docref(NULL, E_WARNING, "Birdstep: Not connection index (%ld)", id); RETURN_FALSE; }
-                                                        
+
 
 static void _close_birdstep_link(zend_rsrc_list_entry *rsrc)
 {
@@ -296,7 +295,7 @@ PHP_FUNCTION(birdstep_connect)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "sss", &serv, &serv_len, &user, &user_len, &pass, &pass_len) == FAILURE) {
 		return;
 	}
-	
+
 	if ( php_birdstep_module.max_links != -1 && php_birdstep_module.num_links == php_birdstep_module.max_links ) {
 		php_error_docref(NULL, E_WARNING, "Birdstep: Too many open connections (%d)",php_birdstep_module.num_links);
 		RETURN_FALSE;
@@ -618,7 +617,7 @@ PHP_FUNCTION(birdstep_off_autocommit)
  */
 PHP_FUNCTION(birdstep_commit)
 {
-zend_long
+	zend_long id;
 	RETCODE stat;
 	VConn *conn;
 

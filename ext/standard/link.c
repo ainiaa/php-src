@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -59,9 +59,9 @@ PHP_FUNCTION(readlink)
 	char buff[MAXPATHLEN];
 	int ret;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &link, &link_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_PATH(link, link_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (php_check_open_basedir(link)) {
 		RETURN_FALSE;
@@ -86,16 +86,16 @@ PHP_FUNCTION(linkinfo)
 {
 	char *link;
 	char *dirname;
-	size_t link_len, dir_len;
+	size_t link_len;
 	zend_stat_t sb;
 	int ret;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &link, &link_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_PATH(link, link_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	dirname = estrndup(link, link_len);
-	dir_len = php_dirname(dirname, link_len);
+	php_dirname(dirname, link_len);
 
 	if (php_check_open_basedir(dirname)) {
 		efree(dirname);
@@ -126,10 +126,11 @@ PHP_FUNCTION(symlink)
 	char dirname[MAXPATHLEN];
 	size_t len;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "pp", &topath, &topath_len, &frompath, &frompath_len) == FAILURE) {
-		return;
-	}
-	
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_PATH(topath, topath_len)
+		Z_PARAM_PATH(frompath, frompath_len)
+	ZEND_PARSE_PARAMETERS_END();
+
 	if (!expand_filepath(frompath, source_p)) {
 		php_error_docref(NULL, E_WARNING, "No such file or directory");
 		RETURN_FALSE;
@@ -144,7 +145,7 @@ PHP_FUNCTION(symlink)
 	}
 
 	if (php_stream_locate_url_wrapper(source_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) ||
-		php_stream_locate_url_wrapper(dest_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) ) 
+		php_stream_locate_url_wrapper(dest_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) )
 	{
 		php_error_docref(NULL, E_WARNING, "Unable to symlink to a URL");
 		RETURN_FALSE;
@@ -182,9 +183,10 @@ PHP_FUNCTION(link)
 	char source_p[MAXPATHLEN];
 	char dest_p[MAXPATHLEN];
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "pp", &topath, &topath_len, &frompath, &frompath_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_PATH(topath, topath_len)
+		Z_PARAM_PATH(frompath, frompath_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (!expand_filepath(frompath, source_p) || !expand_filepath(topath, dest_p)) {
 		php_error_docref(NULL, E_WARNING, "No such file or directory");
@@ -192,7 +194,7 @@ PHP_FUNCTION(link)
 	}
 
 	if (php_stream_locate_url_wrapper(source_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) ||
-		php_stream_locate_url_wrapper(dest_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) ) 
+		php_stream_locate_url_wrapper(dest_p, NULL, STREAM_LOCATE_WRAPPERS_ONLY) )
 	{
 		php_error_docref(NULL, E_WARNING, "Unable to link to a URL");
 		RETURN_FALSE;
@@ -208,9 +210,9 @@ PHP_FUNCTION(link)
 
 #ifndef ZTS
 	ret = link(topath, frompath);
-#else 
-	ret = link(dest_p, source_p);	
-#endif	
+#else
+	ret = link(dest_p, source_p);
+#endif
 	if (ret == -1) {
 		php_error_docref(NULL, E_WARNING, "%s", strerror(errno));
 		RETURN_FALSE;

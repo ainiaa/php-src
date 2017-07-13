@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2014 The PHP Group                                |
+  | Copyright (c) 2006-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -12,13 +12,10 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Authors: Georg Richter <georg@mysql.com>                             |
-  |          Andrey Hristov <andrey@mysql.com>                           |
-  |          Ulf Wendel <uwendel@mysql.com>                              |
+  | Authors: Andrey Hristov <andrey@php.net>                             |
+  |          Ulf Wendel <uw@php.net>                                     |
   +----------------------------------------------------------------------+
 */
-
-/* $Id$ */
 
 #include "php.h"
 #include "mysqlnd.h"
@@ -252,7 +249,7 @@ MYSQLND_METHOD(mysqlnd_debug, func_enter)(MYSQLND_DEBUG * self,
 	if ((self->flags & MYSQLND_DEBUG_DUMP_TRACE) == 0 || self->file_name == NULL) {
 		return FALSE;
 	}
-	if ((uint) zend_stack_count(&self->call_stack) >= self->nest_level_limit) {
+	if ((uint32_t) zend_stack_count(&self->call_stack) >= self->nest_level_limit) {
 		return FALSE;
 	}
 
@@ -305,7 +302,7 @@ struct st_mysqlnd_dbg_function_profile {
 	uint64_t in_calls_underporm_calls;
 	uint64_t min_total;
 	uint64_t max_total;
-	uint64_t avg_total;	
+	uint64_t avg_total;
 	uint64_t total_underporm_calls;
 };
 #define PROFILE_UNDERPERFORM_THRESHOLD 10
@@ -323,7 +320,7 @@ MYSQLND_METHOD(mysqlnd_debug, func_leave)(MYSQLND_DEBUG * self, unsigned int lin
 	if ((self->flags & MYSQLND_DEBUG_DUMP_TRACE) == 0 || self->file_name == NULL) {
 		return PASS;
 	}
-	if ((uint) zend_stack_count(&self->call_stack) >= self->nest_level_limit) {
+	if ((uint32_t) zend_stack_count(&self->call_stack) >= self->nest_level_limit) {
 		return PASS;
 	}
 
@@ -352,7 +349,7 @@ MYSQLND_METHOD(mysqlnd_debug, func_leave)(MYSQLND_DEBUG * self, unsigned int lin
 			struct st_mysqlnd_dbg_function_profile f_profile_stack = {0};
 			struct st_mysqlnd_dbg_function_profile * f_profile = NULL;
 			uint64_t own_time = call_time - mine_non_own_time;
-			uint func_name_len = strlen(*func_name);
+			uint32_t func_name_len = strlen(*func_name);
 
 			self->m->log_va(self, line, file, zend_stack_count(&self->call_stack) - 1, NULL, "<%s (total=%u own=%u in_calls=%u)",
 						*func_name, (unsigned int) call_time, (unsigned int) own_time, (unsigned int) mine_non_own_time
@@ -404,7 +401,7 @@ MYSQLND_METHOD(mysqlnd_debug, func_leave)(MYSQLND_DEBUG * self, unsigned int lin
 				f_profile->calls = 1;
 				zend_hash_str_add_mem(&self->function_profiles, *func_name, func_name_len, f_profile, sizeof(struct st_mysqlnd_dbg_function_profile));
 			}
-			if ((uint) zend_stack_count(&self->call_time_stack)) {
+			if ((uint32_t) zend_stack_count(&self->call_time_stack)) {
 				uint64_t parent_non_own_time = 0;
 
 				parent_non_own_time_ptr = zend_stack_top(&self->call_time_stack);
@@ -432,7 +429,7 @@ MYSQLND_METHOD(mysqlnd_debug, close)(MYSQLND_DEBUG * self)
 			struct st_mysqlnd_dbg_function_profile * f_profile;
 			zend_string	*string_key = NULL;
 
-			self->m->log_va(self, __LINE__, __FILE__, 0, "info : ",	
+			self->m->log_va(self, __LINE__, __FILE__, 0, "info : ",
 					"number of functions: %d", zend_hash_num_elements(&self->function_profiles));
 			ZEND_HASH_FOREACH_STR_KEY_PTR(&self->function_profiles, string_key, f_profile) {
 				self->m->log_va(self, __LINE__, __FILE__, -1, "info : ",
@@ -440,7 +437,7 @@ MYSQLND_METHOD(mysqlnd_debug, close)(MYSQLND_DEBUG * self)
 						"   min_own=%5llu  max_own=%7llu  avg_own=%7llu   "
 						"   min_in_calls=%5llu  max_in_calls=%7llu  avg_in_calls=%7llu"
 						"   min_total=%5llu  max_total=%7llu  avg_total=%7llu"
-						,string_key->val
+						,ZSTR_VAL(string_key)
 						,(uint64_t) f_profile->calls
 						,(uint64_t) f_profile->own_underporm_calls
 						,(uint64_t) f_profile->in_calls_underporm_calls
@@ -458,9 +455,9 @@ MYSQLND_METHOD(mysqlnd_debug, close)(MYSQLND_DEBUG * self)
 						);
 			} ZEND_HASH_FOREACH_END();
 		}
-#endif	
+#endif
 
-		php_stream_free(self->stream, PHP_STREAM_FREE_CLOSE);
+		php_stream_close(self->stream);
 		self->stream = NULL;
 	}
 	/* no DBG_RETURN please */
@@ -572,7 +569,7 @@ MYSQLND_METHOD(mysqlnd_debug, set_mode)(MYSQLND_DEBUG * self, const char * const
 								char func_name[1024];
 								unsigned int func_name_len = MIN(sizeof(func_name) - 1, j - i - 1);
 								memcpy(func_name, mode + i + 1, func_name_len);
-								func_name[func_name_len] = '\0'; 
+								func_name[func_name_len] = '\0';
 
 								zend_hash_str_add_empty_element(&self->not_filtered_functions,
 															func_name, func_name_len);
@@ -663,7 +660,7 @@ MYSQLND_METHOD(mysqlnd_debug, set_mode)(MYSQLND_DEBUG * self, const char * const
 			case 'x': /* mysqlnd extension - profile calls */
 				self->flags |= MYSQLND_DEBUG_PROFILE_CALLS;
 				state = PARSER_WAIT_COLON;
-				break;				
+				break;
 			default:
 				if (state == PARSER_WAIT_MODIFIER) {
 #if 0
@@ -723,8 +720,8 @@ mysqlnd_debug_init(const char * skip_functions[])
 /* }}} */
 
 
-/* {{{ _mysqlnd_debug */
-PHPAPI void _mysqlnd_debug(const char * mode)
+/* {{{ mysqlnd_debug */
+PHPAPI void mysqlnd_debug(const char * mode)
 {
 #if PHP_DEBUG
 	MYSQLND_DEBUG * dbg = MYSQLND_G(dbg);
@@ -759,9 +756,9 @@ static struct st_mysqlnd_plugin_trace_log mysqlnd_plugin_trace_log_plugin =
 		MYSQLND_PLUGIN_API_VERSION,
 		"debug_trace",
 		MYSQLND_VERSION_ID,
-		MYSQLND_VERSION,
+		PHP_MYSQLND_VERSION,
 		"PHP License 3.01",
-		"Andrey Hristov <andrey@mysql.com>,  Ulf Wendel <uwendel@mysql.com>, Georg Richter <georg@mysql.com>",
+		"Andrey Hristov <andrey@php.net>,  Ulf Wendel <uw@php.net>, Georg Richter <georg@php.net>",
 		{
 			NULL, /* no statistics , will be filled later if there are some */
 			NULL, /* no statistics */

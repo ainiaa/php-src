@@ -20,9 +20,9 @@ extern zend_module_entry extname_module_entry;
 #include "TSRM.h"
 #endif
 
-/* 
+/*
   	Declare any global variables you may need between the BEGIN
-	and END macros here:     
+	and END macros here:
 
 ZEND_BEGIN_MODULE_GLOBALS(extname)
 	zend_long  global_value;
@@ -34,14 +34,10 @@ ZEND_END_MODULE_GLOBALS(extname)
    You are encouraged to rename these macros something shorter, see
    examples in any other php module directory.
 */
+#define EXTNAME_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(extname, v)
 
-#ifdef ZTS
-#define EXTNAME_G(v) ZEND_TSRMG(extname_globals_id, zend_extname_globals *, v)
-#ifdef COMPILE_DL_EXTNAME
-ZEND_TSRMLS_CACHE_EXTERN;
-#endif
-#else
-#define EXTNAME_G(v) (extname_globals.v)
+#if defined(ZTS) && defined(COMPILE_DL_EXTNAME)
+ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
 #endif	/* PHP_EXTNAME_H */

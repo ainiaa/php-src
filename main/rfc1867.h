@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -54,7 +54,7 @@ typedef struct _multipart_event_file_data {
 	zend_off_t	offset;
 	char	*data;
 	size_t	length;
-	size_t	*newlength;	
+	size_t	*newlength;
 } multipart_event_file_data;
 
 typedef struct _multipart_event_file_end {
@@ -76,7 +76,7 @@ typedef char* (*php_rfc1867_basename_t)(const zend_encoding *encoding, char *str
 
 SAPI_API SAPI_POST_HANDLER_FUNC(rfc1867_post_handler);
 
-void destroy_uploaded_files_hash(void);
+PHPAPI void destroy_uploaded_files_hash(void);
 void php_rfc1867_register_constants(void);
 extern PHPAPI int (*php_rfc1867_callback)(unsigned int event, void *event_data, void **extra);
 
@@ -86,6 +86,14 @@ SAPI_API void php_rfc1867_set_multibyte_callbacks(
 					php_rfc1867_set_input_encoding_t set_input_encoding,
 					php_rfc1867_getword_t getword,
 					php_rfc1867_getword_conf_t getword_conf,
-					php_rfc1867_basename_t basename);	
+					php_rfc1867_basename_t basename);
 
 #endif /* RFC1867_H */
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -86,7 +86,7 @@ static int stream_cookie_closer(void *cookie)
 
 	/* prevent recursion */
 	stream->fclose_stdiocast = PHP_STREAM_FCLOSE_NONE;
-	return php_stream_close(stream);
+	return php_stream_free(stream, PHP_STREAM_FREE_CLOSE | PHP_STREAM_FREE_KEEP_RSRC);
 }
 #elif defined(HAVE_FOPENCOOKIE)
 static ssize_t stream_cookie_reader(void *cookie, char *buffer, size_t size)
@@ -128,7 +128,7 @@ static int stream_cookie_closer(void *cookie)
 
 	/* prevent recursion */
 	stream->fclose_stdiocast = PHP_STREAM_FCLOSE_NONE;
-	return php_stream_close(stream);
+	return php_stream_free(stream, PHP_STREAM_FREE_CLOSE | PHP_STREAM_FREE_KEEP_RSRC);
 }
 #endif /* elif defined(HAVE_FOPENCOOKIE) */
 
@@ -147,7 +147,7 @@ static COOKIE_IO_FUNCTIONS_T stream_cookie_functions =
  * Result should have at least size 5, e.g. to write wbx+\0 */
 void php_stream_mode_sanitize_fdopen_fopencookie(php_stream *stream, char *result)
 {
-	/* replace modes not supported by fdopen and fopencookie, but supported 
+	/* replace modes not supported by fdopen and fopencookie, but supported
 	 * by PHP's fread(), so that their calls won't fail */
 	const char *cur_mode = stream->mode;
 	int         has_plus = 0,
@@ -165,7 +165,7 @@ void php_stream_mode_sanitize_fdopen_fopencookie(php_stream *stream, char *resul
 		/* x is allowed (at least by glibc & compat), but not as the 1st mode
 		 * as in PHP and in any case is (at best) ignored by fdopen and fopencookie */
 	}
-	
+
 	/* assume current mode has at most length 4 (e.g. wbn+) */
 	for (i = 1; i < 4 && cur_mode[i] != '\0'; i++) {
 		if (cur_mode[i] == 'b') {
@@ -342,7 +342,7 @@ exit_success:
 /* }}} */
 
 /* {{{ php_stream_open_wrapper_as_file */
-PHPAPI FILE * _php_stream_open_wrapper_as_file(char *path, char *mode, int options, char **opened_path STREAMS_DC)
+PHPAPI FILE * _php_stream_open_wrapper_as_file(char *path, char *mode, int options, zend_string **opened_path STREAMS_DC)
 {
 	FILE *fp = NULL;
 	php_stream *stream = NULL;
@@ -356,7 +356,7 @@ PHPAPI FILE * _php_stream_open_wrapper_as_file(char *path, char *mode, int optio
 	if (php_stream_cast(stream, PHP_STREAM_AS_STDIO|PHP_STREAM_CAST_TRY_HARD|PHP_STREAM_CAST_RELEASE, (void**)&fp, REPORT_ERRORS) == FAILURE) {
 		php_stream_close(stream);
 		if (opened_path && *opened_path) {
-			efree(*opened_path);
+			zend_string_release(*opened_path);
 		}
 		return NULL;
 	}

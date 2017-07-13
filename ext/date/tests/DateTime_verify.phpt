@@ -156,7 +156,7 @@ array(18) {
   }
 }
 ..and get names of all its class constants
-array(11) {
+array(13) {
   ["ATOM"]=>
   string(13) "Y-m-d\TH:i:sP"
   ["COOKIE"]=>
@@ -171,10 +171,14 @@ array(11) {
   string(16) "D, d M y H:i:s O"
   ["RFC1123"]=>
   string(16) "D, d M Y H:i:s O"
+  ["RFC7231"]=>
+  string(21) "D, d M Y H:i:s \G\M\T"
   ["RFC2822"]=>
   string(16) "D, d M Y H:i:s O"
   ["RFC3339"]=>
   string(13) "Y-m-d\TH:i:sP"
+  ["RFC3339_EXTENDED"]=>
+  string(15) "Y-m-d\TH:i:s.vP"
   ["RSS"]=>
   string(16) "D, d M Y H:i:s O"
   ["W3C"]=>

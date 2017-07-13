@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -15,7 +15,7 @@
    | Author: Kristian Koehntopp <kris@koehntopp.de>					      |
    +----------------------------------------------------------------------+
  */
- 
+
 /* $Id$ */
 
 /* {{{ includes & prototypes */
@@ -62,7 +62,7 @@ ZEND_END_MODULE_GLOBALS(recode)
 #else
 # define ReSG(v) (recode_globals.v)
 #endif
-    
+
 ZEND_DECLARE_MODULE_GLOBALS(recode)
 static PHP_GINIT_FUNCTION(recode);
 
@@ -89,14 +89,14 @@ static const zend_function_entry php_recode_functions[] = {
 
 zend_module_entry recode_module_entry = {
 	STANDARD_MODULE_HEADER,
-	"recode", 
- 	php_recode_functions, 
-	PHP_MINIT(recode), 
-	PHP_MSHUTDOWN(recode), 
+	"recode",
+ 	php_recode_functions,
+	PHP_MINIT(recode),
+	PHP_MSHUTDOWN(recode),
 	NULL,
-	NULL, 
-	PHP_MINFO(recode), 
-	NO_VERSION_YET,
+	NULL,
+	PHP_MINFO(recode),
+	PHP_RECODE_VERSION,
 	PHP_MODULE_GLOBALS(recode),
 	PHP_GINIT(recode),
 	NULL,
@@ -164,7 +164,7 @@ PHP_FUNCTION(recode_string)
 		php_error_docref(NULL, E_WARNING, "Illegal recode request '%s'", req);
 		goto error_exit;
 	}
-	
+
 	recode_buffer_to_buffer(request, str, str_len, &r, &r_len, &r_alen);
 	if (!r) {
 		php_error_docref(NULL, E_WARNING, "Recoding failed.");
@@ -187,7 +187,7 @@ PHP_FUNCTION(recode_file)
 {
 	RECODE_REQUEST request = NULL;
 	char *req;
-	int req_len;
+	size_t req_len;
 	zval *input, *output;
 	php_stream *instream, *outstream;
 	FILE  *in_fp,  *out_fp;
@@ -202,7 +202,7 @@ PHP_FUNCTION(recode_file)
 	if (FAILURE == php_stream_cast(instream, PHP_STREAM_AS_STDIO, (void**)&in_fp, REPORT_ERRORS))	{
 		RETURN_FALSE;
 	}
-	
+
 	if (FAILURE == php_stream_cast(outstream, PHP_STREAM_AS_STDIO, (void**)&out_fp, REPORT_ERRORS))	{
 		RETURN_FALSE;
 	}
@@ -217,7 +217,7 @@ PHP_FUNCTION(recode_file)
 		php_error_docref(NULL, E_WARNING, "Illegal recode request '%s'", req);
 		goto error_exit;
 	}
-	
+
 	if (!recode_file_to_file(request, in_fp, out_fp)) {
 		php_error_docref(NULL, E_WARNING, "Recoding failed.");
 		goto error_exit;

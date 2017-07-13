@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -86,7 +86,7 @@ DBA_UPDATE_FUNC(flatfile)
 	FLATFILE_GKEY;
 	gval.dptr = (char *) val;
 	gval.dsize = vallen;
-	
+
 	switch(flatfile_store(dba, gkey, gval, mode==1 ? FLATFILE_INSERT : FLATFILE_REPLACE)) {
 		case 0:
 			return SUCCESS;
@@ -106,7 +106,7 @@ DBA_EXISTS_FUNC(flatfile)
 	datum gval;
 	FLATFILE_DATA;
 	FLATFILE_GKEY;
-	
+
 	gval = flatfile_fetch(dba, gkey);
 	if (gval.dptr) {
 		efree(gval.dptr);
@@ -142,11 +142,11 @@ DBA_FIRSTKEY_FUNC(flatfile)
 DBA_NEXTKEY_FUNC(flatfile)
 {
 	FLATFILE_DATA;
-	
+
 	if (!dba->nextkey.dptr) {
 		return NULL;
 	}
-	
+
 	if (dba->nextkey.dptr) {
 		efree(dba->nextkey.dptr);
 	}

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.0 of the PHP license,       |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -151,9 +151,7 @@ zend_function_entry enchant_functions[] = {
 /* {{{ enchant_module_entry
  */
 zend_module_entry enchant_module_entry = {
-#if ZEND_MODULE_API_NO >= 20010901
 	STANDARD_MODULE_HEADER,
-#endif
 	"enchant",
 	enchant_functions,
 	PHP_MINIT(enchant),
@@ -161,9 +159,7 @@ zend_module_entry enchant_module_entry = {
 	NULL,	/* Replace with NULL if there's nothing to do at request start */
 	NULL,	/* Replace with NULL if there's nothing to do at request end */
 	PHP_MINFO(enchant),
-#if ZEND_MODULE_API_NO >= 20010901
 	PHP_ENCHANT_VERSION,
-#endif
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -338,14 +334,14 @@ PHP_MINFO_FUNCTION(enchant)
 /* }}} */
 
 #define PHP_ENCHANT_GET_BROKER	\
-	ZEND_FETCH_RESOURCE(pbroker, enchant_broker *, broker, -1, "enchant_broker", le_enchant_broker);	\
+	pbroker = (enchant_broker *)zend_fetch_resource(Z_RES_P(broker), "enchant_broker", le_enchant_broker); \
 	if (!pbroker || !pbroker->pbroker) {	\
 		php_error_docref(NULL, E_WARNING, "%s", "Resource broker invalid");	\
 		RETURN_FALSE;	\
 	}
 
 #define PHP_ENCHANT_GET_DICT	\
-	ZEND_FETCH_RESOURCE(pdict, enchant_dict *, dict, -1, "enchant_dict", le_enchant_dict);	\
+	pdict = (enchant_dict *)zend_fetch_resource(Z_RES_P(dict), "enchant_dict", le_enchant_dict); \
 	if (!pdict || !pdict->pdict) {	\
 		php_error_docref(NULL, E_WARNING, "%s", "Invalid dictionary resource.");	\
 		RETURN_FALSE;	\
@@ -369,7 +365,8 @@ PHP_FUNCTION(enchant_broker_init)
 		broker->pbroker = pbroker;
 		broker->dict = NULL;
 		broker->dictcnt = 0;
-		broker->rsrc = ZEND_REGISTER_RESOURCE(return_value, broker, le_enchant_broker);
+		broker->rsrc = zend_register_resource(broker, le_enchant_broker);
+		RETURN_RES(broker->rsrc);
 	} else {
 		RETURN_FALSE;
 	}
@@ -433,7 +430,7 @@ PHP_FUNCTION(enchant_broker_set_dict_path)
 	if (!value_len) {
 		RETURN_FALSE;
 	}
-	
+
 	PHP_ENCHANT_GET_BROKER;
 
 	switch (dict_type) {
@@ -468,7 +465,7 @@ PHP_FUNCTION(enchant_broker_get_dict_path)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "rl", &broker, &dict_type) == FAILURE) {
 		RETURN_FALSE;
 	}
-	
+
 	PHP_ENCHANT_GET_BROKER;
 
 	switch (dict_type) {
@@ -543,7 +540,7 @@ PHP_FUNCTION(enchant_broker_request_dict)
 	}
 
 	PHP_ENCHANT_GET_BROKER;
-	
+
 	if (taglen == 0) {
 		php_error_docref(NULL, E_WARNING, "Tag cannot be empty");
 		RETURN_FALSE;
@@ -551,13 +548,12 @@ PHP_FUNCTION(enchant_broker_request_dict)
 
 	d = enchant_broker_request_dict(pbroker->pbroker, (const char *)tag);
 	if (d) {
+		pos = pbroker->dictcnt++;
 		if (pbroker->dictcnt) {
 			pbroker->dict = (enchant_dict **)erealloc(pbroker->dict, sizeof(enchant_dict *) * pbroker->dictcnt);
-			pos = pbroker->dictcnt++;
 		} else {
 			pbroker->dict = (enchant_dict **)emalloc(sizeof(enchant_dict *));
 			pos = 0;
-			pbroker->dictcnt++;
 		}
 
 		dict = pbroker->dict[pos] = (enchant_dict *)emalloc(sizeof(enchant_dict));
@@ -566,8 +562,9 @@ PHP_FUNCTION(enchant_broker_request_dict)
 		dict->pdict = d;
 		pbroker->dict[pos] = dict;
 
-		dict->rsrc = ZEND_REGISTER_RESOURCE(return_value, dict, le_enchant_dict);
+		dict->rsrc = zend_register_resource(dict, le_enchant_dict);
 		pbroker->rsrc->gc.refcount++;
+		RETURN_RES(dict->rsrc);
 	} else {
 		RETURN_FALSE;
 	}
@@ -590,11 +587,7 @@ PHP_FUNCTION(enchant_broker_request_pwl_dict)
 		RETURN_FALSE;
 	}
 
-#if PHP_API_VERSION < 20100412
-	if ((PG(safe_mode) && (!php_checkuid(pwl, NULL, CHECKUID_CHECK_FILE_AND_DIR))) || php_check_open_basedir(pwl)) {
-#else
 	if (php_check_open_basedir(pwl)) {
-#endif
 		RETURN_FALSE;
 	}
 
@@ -602,22 +595,23 @@ PHP_FUNCTION(enchant_broker_request_pwl_dict)
 
 	d = enchant_broker_request_pwl_dict(pbroker->pbroker, (const char *)pwl);
 	if (d) {
+		pos = pbroker->dictcnt++;
 		if (pbroker->dictcnt) {
-			pos = pbroker->dictcnt++;
 			pbroker->dict = (enchant_dict **)erealloc(pbroker->dict, sizeof(enchant_dict *) * pbroker->dictcnt);
 		} else {
 			pbroker->dict = (enchant_dict **)emalloc(sizeof(enchant_dict *));
 			pos = 0;
-			pbroker->dictcnt++;
 		}
+
 		dict = pbroker->dict[pos] = (enchant_dict *)emalloc(sizeof(enchant_dict));
 		dict->id = pos;
 		dict->pbroker = pbroker;
 		dict->pdict = d;
 		pbroker->dict[pos] = dict;
 
-		dict->rsrc = ZEND_REGISTER_RESOURCE(return_value, dict, le_enchant_dict);
+		dict->rsrc = zend_register_resource(dict, le_enchant_dict);
 		pbroker->rsrc->gc.refcount++;
+		RETURN_RES(dict->rsrc);
 	} else {
 		RETURN_FALSE;
 	}

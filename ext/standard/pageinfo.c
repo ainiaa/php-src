@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -101,7 +101,7 @@ PHP_FUNCTION(getmyuid)
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	
+
 	uid = php_getuid();
 	if (uid < 0) {
 		RETURN_FALSE;
@@ -120,7 +120,7 @@ PHP_FUNCTION(getmygid)
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	
+
 	gid = php_getgid();
 	if (gid < 0) {
 		RETURN_FALSE;
@@ -139,7 +139,7 @@ PHP_FUNCTION(getmypid)
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	
+
 	pid = getpid();
 	if (pid < 0) {
 		RETURN_FALSE;

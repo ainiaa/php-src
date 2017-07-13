@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -37,7 +37,7 @@ typedef enum {
 	/* Unmap the last range that was mapped for the stream */
 	PHP_STREAM_MMAP_UNMAP
 } php_stream_mmap_operation_t;
-	
+
 typedef enum {
 	PHP_STREAM_MAP_MODE_READONLY,
 	PHP_STREAM_MAP_MODE_READWRITE,
@@ -50,9 +50,9 @@ typedef struct {
 	 * If length is 0, the whole file is mapped */
 	size_t offset;
 	size_t length;
-	
+
 	php_stream_mmap_access_t mode;
-	
+
 	/* returned mapped address */
 	char *mapped;
 
@@ -67,7 +67,7 @@ typedef struct {
 #define php_stream_mmap_possible(stream)			(!php_stream_is_filtered((stream)) && php_stream_mmap_supported((stream)))
 
 BEGIN_EXTERN_C()
-PHPAPI char *_php_stream_mmap_range(php_stream *stream, size_t offset, size_t length, php_stream_mmap_operation_t mode, size_t *mapped_len);
+PHPAPI char *_php_stream_mmap_range(php_stream *stream, size_t offset, size_t length, php_stream_mmap_access_t mode, size_t *mapped_len);
 #define php_stream_mmap_range(stream, offset, length, mode, mapped_len)	_php_stream_mmap_range((stream), (offset), (length), (mode), (mapped_len))
 
 /* un-maps the last mapped range */

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.0 of the PHP license,       |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -163,7 +163,7 @@ typedef struct {
 	unsigned is_unicode:1;
 	unsigned _spare:31;
 } pdo_odbc_param;
-	
+
 extern pdo_driver_t pdo_odbc_driver;
 extern struct pdo_stmt_methods odbc_stmt_methods;
 
@@ -176,8 +176,8 @@ void pdo_odbc_init_error_table(void);
 void pdo_odbc_fini_error_table(void);
 
 #ifdef SQL_ATTR_CONNECTION_POOLING
-extern SQLUINTEGER pdo_odbc_pool_on;
-extern SQLUINTEGER pdo_odbc_pool_mode;
+extern zend_ulong pdo_odbc_pool_on;
+extern zend_ulong pdo_odbc_pool_mode;
 #endif
 
 enum {

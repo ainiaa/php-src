@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -14,6 +14,7 @@
    +----------------------------------------------------------------------+
    | Authors: Andi Gutmans <andi@zend.com>                                |
    |          Zeev Suraski <zeev@zend.com>                                |
+   |          Dmitry Stogov <dmitry@zend.com>                             |
    +----------------------------------------------------------------------+
 */
 
@@ -23,7 +24,7 @@
 #include "zend_globals.h"
 #include "zend_variables.h"
 #include "zend_API.h"
-#include "zend_objects_API.h"	
+#include "zend_objects_API.h"
 
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init_size)
 {
@@ -42,17 +43,22 @@ ZEND_API void zend_objects_store_destroy(zend_objects_store *objects)
 
 ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects)
 {
-	uint32_t i;
+	if (objects->top > 1) {
+		uint32_t i;
+		for (i = 1; i < objects->top; i++) {
+			zend_object *obj = objects->object_buckets[i];
+			if (IS_OBJ_VALID(obj)) {
+				if (!(GC_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
+					GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
 
-	for (i = 1; i < objects->top ; i++) {
-		zend_object *obj = objects->object_buckets[i];
-
-		if (IS_OBJ_VALID(obj)) {
-			if (!(GC_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
-				GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
-				GC_REFCOUNT(obj)++;
-				obj->handlers->dtor_obj(obj);
-				GC_REFCOUNT(obj)--;
+					if (obj->handlers->dtor_obj
+					 && (obj->handlers->dtor_obj != zend_objects_destroy_object
+					  || obj->ce->destructor)) {
+						GC_REFCOUNT(obj)++;
+						obj->handlers->dtor_obj(obj);
+						GC_REFCOUNT(obj)--;
+					}
+				}
 			}
 		}
 	}
@@ -60,50 +66,63 @@ ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects)
 
 ZEND_API void zend_objects_store_mark_destructed(zend_objects_store *objects)
 {
-	uint32_t i;
+	if (objects->object_buckets && objects->top > 1) {
+		zend_object **obj_ptr = objects->object_buckets + 1;
+		zend_object **end = objects->object_buckets + objects->top;
 
-	if (!objects->object_buckets) {
-		return;
-	}
-	for (i = 1; i < objects->top ; i++) {
-		zend_object *obj = objects->object_buckets[i];
+		do {
+			zend_object *obj = *obj_ptr;
 
-		if (IS_OBJ_VALID(obj)) {
-			GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
-		}
+			if (IS_OBJ_VALID(obj)) {
+				GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
+			}
+			obj_ptr++;
+		} while (obj_ptr != end);
 	}
 }
 
-ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects)
+ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects, zend_bool fast_shutdown)
 {
-	uint32_t i;
+	zend_object **obj_ptr, **end, *obj;
 
-	/* Free object properties but don't free object their selves */
-	for (i = objects->top - 1; i > 0 ; i--) {
-		zend_object *obj = objects->object_buckets[i];
-
-		if (IS_OBJ_VALID(obj)) {
-			if (!(GC_FLAGS(obj) & IS_OBJ_FREE_CALLED)) {
-				GC_FLAGS(obj) |= IS_OBJ_FREE_CALLED;
-				if (obj->handlers->free_obj) {
-					GC_REFCOUNT(obj)++;
-					obj->handlers->free_obj(obj);
-					GC_REFCOUNT(obj)--;
-				}
-			}
-		}
+	if (objects->top <= 1) {
+		return;
 	}
 
-	/* Now free objects theirselves */
-	for (i = 1; i < objects->top ; i++) {
-		zend_object *obj = objects->object_buckets[i];
+	/* Free object contents, but don't free objects themselves, so they show up as leaks */
+	end = objects->object_buckets + 1;
+	obj_ptr = objects->object_buckets + objects->top;
 
-		if (IS_OBJ_VALID(obj)) {
-			/* Not adding to free list as we are shutting down anyway */
-			void *ptr = ((char*)obj) - obj->handlers->offset;
-			GC_REMOVE_FROM_BUFFER(obj);
-			efree(ptr);
-		}
+	if (fast_shutdown) {
+		do {
+			obj_ptr--;
+			obj = *obj_ptr;
+			if (IS_OBJ_VALID(obj)) {
+				if (!(GC_FLAGS(obj) & IS_OBJ_FREE_CALLED)) {
+					GC_FLAGS(obj) |= IS_OBJ_FREE_CALLED;
+					if (obj->handlers->free_obj && obj->handlers->free_obj != zend_object_std_dtor) {
+						GC_REFCOUNT(obj)++;
+						obj->handlers->free_obj(obj);
+						GC_REFCOUNT(obj)--;
+					}
+				}
+			}
+		} while (obj_ptr != end);
+	} else {
+		do {
+			obj_ptr--;
+			obj = *obj_ptr;
+			if (IS_OBJ_VALID(obj)) {
+				if (!(GC_FLAGS(obj) & IS_OBJ_FREE_CALLED)) {
+					GC_FLAGS(obj) |= IS_OBJ_FREE_CALLED;
+					if (obj->handlers->free_obj) {
+						GC_REFCOUNT(obj)++;
+						obj->handlers->free_obj(obj);
+						GC_REFCOUNT(obj)--;
+					}
+				}
+			}
+		} while (obj_ptr != end);
 	}
 }
 
@@ -114,7 +133,10 @@ ZEND_API void zend_objects_store_put(zend_object *object)
 {
 	int handle;
 
-	if (EG(objects_store).free_list_head != -1) {
+	/* When in shutdown sequesnce - do not reuse previously freed handles, to make sure
+	 * the dtors for newly created objects are called in zend_objects_store_call_destructors() loop
+	 */
+	if (!(EG(flags) & EG_FLAGS_IN_SHUTDOWN) && EG(objects_store).free_list_head != -1) {
 		handle = EG(objects_store).free_list_head;
 		EG(objects_store).free_list_head = GET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle]);
 	} else {
@@ -132,17 +154,6 @@ ZEND_API void zend_objects_store_put(zend_object *object)
             SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);	\
 			EG(objects_store).free_list_head = handle;
 
-ZEND_API void zend_objects_store_free(zend_object *object) /* {{{ */
-{
-	uint32_t handle = object->handle;
-	void *ptr = ((char*)object) - object->handlers->offset;
-
-	GC_REMOVE_FROM_BUFFER(object);
-	efree(ptr);
-	ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle);
-}
-/* }}} */
-
 ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 {
 	/*	Make sure we hold a reference count during the destructor call
@@ -152,22 +163,18 @@ ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 	if (EG(objects_store).object_buckets &&
 	    IS_OBJ_VALID(EG(objects_store).object_buckets[object->handle])) {
 		if (GC_REFCOUNT(object) == 0) {
-			int failure = 0;
-
 			if (!(GC_FLAGS(object) & IS_OBJ_DESTRUCTOR_CALLED)) {
 				GC_FLAGS(object) |= IS_OBJ_DESTRUCTOR_CALLED;
 
-				if (object->handlers->dtor_obj) {
+				if (object->handlers->dtor_obj
+				 && (object->handlers->dtor_obj != zend_objects_destroy_object
+				  || object->ce->destructor)) {
 					GC_REFCOUNT(object)++;
-					zend_try {
-						object->handlers->dtor_obj(object);
-					} zend_catch {
-						failure = 1;
-					} zend_end_try();
+					object->handlers->dtor_obj(object);
 					GC_REFCOUNT(object)--;
 				}
 			}
-			
+
 			if (GC_REFCOUNT(object) == 0) {
 				uint32_t handle = object->handle;
 				void *ptr;
@@ -176,13 +183,9 @@ ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 				if (!(GC_FLAGS(object) & IS_OBJ_FREE_CALLED)) {
 					GC_FLAGS(object) |= IS_OBJ_FREE_CALLED;
 					if (object->handlers->free_obj) {
-						zend_try {
-							GC_REFCOUNT(object)++;
-							object->handlers->free_obj(object);
-							GC_REFCOUNT(object)--;
-						} zend_catch {
-							failure = 1;
-						} zend_end_try();
+						GC_REFCOUNT(object)++;
+						object->handlers->free_obj(object);
+						GC_REFCOUNT(object)--;
 					}
 				}
 				ptr = ((char*)object) - object->handlers->offset;
@@ -190,34 +193,12 @@ ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 				efree(ptr);
 				ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle);
 			}
-			
-			if (failure) {
-				zend_bailout();
-			}
 		} else {
 			GC_REFCOUNT(object)--;
 		}
 	}
 }
 /* }}} */
-
-/* zend_object_store_set_object:
- * It is ONLY valid to call this function from within the constructor of an
- * overloaded object.  Its purpose is to set the object pointer for the object
- * when you can't possibly know its value until you have parsed the arguments
- * from the constructor function.  You MUST NOT use this function for any other
- * weird games, or call it at any other time after the object is constructed.
- * */
-ZEND_API void zend_object_store_set_object(zval *zobject, zend_object *object)
-{
-	EG(objects_store).object_buckets[Z_OBJ_HANDLE_P(zobject)] = object;
-}
-
-/* Called when the ctor was terminated by an exception */
-ZEND_API void zend_object_store_ctor_failed(zend_object *obj)
-{
-	GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
-}
 
 ZEND_API zend_object_handlers *zend_get_std_object_handlers(void)
 {
@@ -230,4 +211,6 @@ ZEND_API zend_object_handlers *zend_get_std_object_handlers(void)
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

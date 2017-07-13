@@ -8,11 +8,11 @@
  * and crypt(3) interfaces added, but optimizations specific to password
  * cracking removed.
  *
- * Written by Solar Designer <solar at openwall.com> in 1998-2014.
+ * Written by Solar Designer <solar at openwall.com> in 1998-2015.
  * No copyright is claimed, and the software is hereby placed in the public
  * domain. In case this attempt to disclaim copyright and place the software
  * in the public domain is deemed null and void, then the software is
- * Copyright (c) 1998-2014 Solar Designer and it is hereby released to the
+ * Copyright (c) 1998-2015 Solar Designer and it is hereby released to the
  * general public under the following terms:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -404,6 +404,10 @@ static int BF_decode(BF_word *dst, const char *src, int size)
 		BF_safe_atoi64(c4, *sptr++);
 		*dptr++ = ((c3 & 0x03) << 6) | c4;
 	} while (dptr < end);
+
+	if (end - dptr == size) {
+		return -1;
+	}
 
 	while (dptr < end) /* PHP hack */
 		*dptr++ = 0;

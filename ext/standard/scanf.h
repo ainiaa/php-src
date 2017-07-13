@@ -1,8 +1,8 @@
-/* 
+/*
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -27,7 +27,7 @@
                                 /* upper limit to keep resources in check and   */
                                 /* minimize the possibility of exploits         */
 
-#define SCAN_SUCCESS			SUCCESS	
+#define SCAN_SUCCESS			SUCCESS
 #define SCAN_ERROR_EOF			-1	/* indicates premature termination of scan 	*/
 									/* can be caused by bad parameters or format*/
 									/* string.									*/
@@ -37,7 +37,7 @@
 #define SCAN_ERROR_INTERNAL             (SCAN_ERROR_WRONG_PARAM_COUNT - 1)
 
 
-/*  
+/*
  * The following are here solely for the benefit of the scanf type functions
  * e.g. fscanf
  */

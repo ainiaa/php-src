@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -22,8 +22,8 @@
  * Functions to parse & compse IPTC data.
  * PhotoShop >= 3.0 can read and write textual data to JPEG files.
  * ... more to come .....
- * 
- * i know, parts of this is now duplicated in image.c 
+ *
+ * i know, parts of this is now duplicated in image.c
  * but in this case i think it's okay!
  */
 
@@ -31,13 +31,22 @@
  * TODO:
  *  - add IPTC translation table
  */
- 
+
 #include "php.h"
 #include "php_iptc.h"
 #include "ext/standard/head.h"
 
 #include <sys/stat.h>
 
+#ifdef PHP_WIN32
+# include "win32/php_stdint.h"
+#else
+# if HAVE_INTTYPES_H
+#  include <inttypes.h>
+# elif HAVE_STDINT_H
+#  include <stdint.h>
+# endif
+#endif
 
 /* some defines for the different JPEG block types */
 #define M_SOF0  0xC0            /* Start Of Frame N */
@@ -76,7 +85,7 @@
 /* {{{ php_iptc_put1
  */
 static int php_iptc_put1(FILE *fp, int spool, unsigned char c, unsigned char **spoolbuf)
-{ 
+{
 	if (spool > 0)
 		PUTC(c);
 
@@ -89,7 +98,7 @@ static int php_iptc_put1(FILE *fp, int spool, unsigned char c, unsigned char **s
 /* {{{ php_iptc_get1
  */
 static int php_iptc_get1(FILE *fp, int spool, unsigned char **spoolbuf)
-{ 	
+{
 	int c;
 	char cc;
 
@@ -121,7 +130,7 @@ static int php_iptc_read_remaining(FILE *fp, int spool, unsigned char **spoolbuf
 /* {{{ php_iptc_skip_variable
  */
 static int php_iptc_skip_variable(FILE *fp, int spool, unsigned char **spoolbuf)
-{ 
+{
 	unsigned int  length;
 	int c1, c2;
 
@@ -182,16 +191,25 @@ PHP_FUNCTION(iptcembed)
 	zend_long spool = 0;
 	FILE *fp;
 	unsigned int marker, done = 0;
-	int inx;
-	unsigned char *spoolbuf = NULL, *poi = NULL;
+	size_t inx;
+	zend_string *spoolbuf = NULL;
+	unsigned char *poi = NULL;
 	zend_stat_t sb;
 	zend_bool written = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "sp|l", &iptcdata, &iptcdata_len, &jpeg_file, &jpeg_file_len, &spool) != SUCCESS) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(2, 3)
+		Z_PARAM_STRING(iptcdata, iptcdata_len)
+		Z_PARAM_PATH(jpeg_file, jpeg_file_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(spool)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (php_check_open_basedir(jpeg_file)) {
+		RETURN_FALSE;
+	}
+
+	if (iptcdata_len >= SIZE_MAX - sizeof(psheader) - 1025) {
+		php_error_docref(NULL, E_WARNING, "IPTC data too large");
 		RETURN_FALSE;
 	}
 
@@ -203,14 +221,15 @@ PHP_FUNCTION(iptcembed)
 	if (spool < 2) {
 		zend_fstat(fileno(fp), &sb);
 
-		poi = spoolbuf = safe_emalloc(1, iptcdata_len + sizeof(psheader) + sb.st_size + 1024, 1);
+		spoolbuf = zend_string_safe_alloc(1, iptcdata_len + sizeof(psheader) + 1024 + 1, sb.st_size, 0);
+		poi = (unsigned char*)ZSTR_VAL(spoolbuf);
 		memset(poi, 0, iptcdata_len + sizeof(psheader) + sb.st_size + 1024 + 1);
-	} 
+	}
 
 	if (php_iptc_get1(fp, spool, poi?&poi:0) != 0xFF) {
 		fclose(fp);
 		if (spoolbuf) {
-			efree(spoolbuf);
+			zend_string_free(spoolbuf);
 		}
 		RETURN_FALSE;
 	}
@@ -218,7 +237,7 @@ PHP_FUNCTION(iptcembed)
 	if (php_iptc_get1(fp, spool, poi?&poi:0) != 0xD8) {
 		fclose(fp);
 		if (spoolbuf) {
-			efree(spoolbuf);
+			zend_string_free(spoolbuf);
 		}
 		RETURN_FALSE;
 	}
@@ -228,14 +247,15 @@ PHP_FUNCTION(iptcembed)
 
 		if (marker == M_EOI) { /* EOF */
 			break;
-		} else if (marker != M_APP13) { 
+		} else if (marker != M_APP13) {
 			php_iptc_put1(fp, spool, (unsigned char)marker, poi?&poi:0);
 		}
 
 		switch (marker) {
 			case M_APP13:
 				/* we are going to write a new APP13 marker, so don't output the old one */
-				php_iptc_skip_variable(fp, 0, 0);    
+				php_iptc_skip_variable(fp, 0, 0);
+				fgetc(fp); /* skip already copied 0xFF byte */
 				php_iptc_read_remaining(fp, spool, poi?&poi:0);
 				done = 1;
 				break;
@@ -270,7 +290,7 @@ PHP_FUNCTION(iptcembed)
 				}
 				break;
 
-			case M_SOS:								
+			case M_SOS:
 				/* we hit data, no more marker-inserting can be done! */
 				php_iptc_read_remaining(fp, spool, poi?&poi:0);
 				done = 1;
@@ -285,9 +305,8 @@ PHP_FUNCTION(iptcembed)
 	fclose(fp);
 
 	if (spool < 2) {
-		// TODO: avoid reallocation ???
-		RETVAL_STRINGL(spoolbuf, poi - spoolbuf);
-		efree(spoolbuf);
+		spoolbuf = zend_string_truncate(spoolbuf, poi - (unsigned char*)ZSTR_VAL(spoolbuf), 0);
+		RETURN_NEW_STR(spoolbuf);
 	} else {
 		RETURN_TRUE;
 	}
@@ -298,21 +317,21 @@ PHP_FUNCTION(iptcembed)
    Parse binary IPTC-data into associative array */
 PHP_FUNCTION(iptcparse)
 {
-	int inx = 0, len;
+	size_t inx = 0, len;
 	unsigned int tagsfound = 0;
 	unsigned char *buffer, recnum, dataset;
 	char *str, key[16];
 	size_t str_len;
 	zval values, *element;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &str, &str_len) != SUCCESS) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(str, str_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	buffer = (unsigned char *)str;
 
 	while (inx < str_len) { /* find 1st tag */
-		if ((buffer[inx] == 0x1c) && ((buffer[inx+1] == 0x01) || (buffer[inx+1] == 0x02))){ 
+		if ((buffer[inx] == 0x1c) && ((buffer[inx+1] == 0x01) || (buffer[inx+1] == 0x02))){
 			break;
 		} else {
 			inx++;
@@ -322,8 +341,8 @@ PHP_FUNCTION(iptcparse)
 	while (inx < str_len) {
 		if (buffer[ inx++ ] != 0x1c) {
 			break;   /* we ran against some data which does not conform to IPTC - stop parsing! */
-		} 
-		
+		}
+
 		if ((inx + 4) >= str_len)
 			break;
 
@@ -334,15 +353,15 @@ PHP_FUNCTION(iptcparse)
 			if((inx+6) >= str_len) {
 				break;
 			}
-			len = (((zend_long) buffer[ inx + 2 ]) << 24) + (((zend_long) buffer[ inx + 3 ]) << 16) + 
+			len = (((zend_long) buffer[ inx + 2 ]) << 24) + (((zend_long) buffer[ inx + 3 ]) << 16) +
 				  (((zend_long) buffer[ inx + 4 ]) <<  8) + (((zend_long) buffer[ inx + 5 ]));
 			inx += 6;
 		} else { /* short tag */
 			len = (((unsigned short) buffer[ inx ])<<8) | (unsigned short)buffer[ inx+1 ];
 			inx += 2;
 		}
-		
-		if ((len < 0) || (len > str_len) || (inx + len) > str_len) {
+
+		if ((len > str_len) || (inx + len) > str_len) {
 			break;
 		}
 
@@ -354,11 +373,11 @@ PHP_FUNCTION(iptcparse)
 
 		if ((element = zend_hash_str_find(Z_ARRVAL_P(return_value), key, strlen(key))) == NULL) {
 			array_init(&values);
-			
+
 			element = zend_hash_str_update(Z_ARRVAL_P(return_value), key, strlen(key), &values);
-		} 
-			
-		add_next_index_stringl(element, buffer+inx, len);
+		}
+
+		add_next_index_stringl(element, (char *) buffer+inx, len);
 		inx += len;
 		tagsfound++;
 	}

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -28,10 +28,10 @@
 #include "php_dom.h"
 
 /*
-* class DOMNotation extends DOMNode 
+* class DOMNotation extends DOMNode
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-5431D1B9
-* Since: 
+* Since:
 */
 
 const zend_function_entry php_dom_notation_class_functions[] = {
@@ -40,10 +40,10 @@ const zend_function_entry php_dom_notation_class_functions[] = {
 
 /* {{{ attribute protos, not implemented yet */
 
-/* {{{ publicId	string	
-readonly=yes 
+/* {{{ publicId	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-54F2B4D0
-Since: 
+Since:
 */
 int dom_notation_public_id_read(dom_object *obj, zval *retval)
 {
@@ -65,10 +65,10 @@ int dom_notation_public_id_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ systemId	string	
-readonly=yes 
+/* {{{ systemId	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-E8AAB1D0
-Since: 
+Since:
 */
 int dom_notation_system_id_read(dom_object *obj, zval *retval)
 {

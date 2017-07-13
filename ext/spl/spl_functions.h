@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -70,7 +70,7 @@ zend_string *spl_gen_private_prop_name(zend_class_entry *ce, char *prop_name, in
 
 #define SPL_ME(class_name, function_name, arg_info, flags) \
 	PHP_ME( spl_ ## class_name, function_name, arg_info, flags)
-	
+
 #define SPL_ABSTRACT_ME(class_name, function_name, arg_info) \
 	ZEND_ABSTRACT_ME( spl_ ## class_name, function_name, arg_info)
 

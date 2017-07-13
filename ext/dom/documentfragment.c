@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -37,10 +37,10 @@ ZEND_END_ARG_INFO();
 /* }}} */
 
 /*
-* class DOMDocumentFragment extends DOMNode 
+* class DOMDocumentFragment extends DOMNode
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-B63ED1A3
-* Since: 
+* Since:
 */
 
 const zend_function_entry php_dom_documentfragment_class_functions[] = {
@@ -49,22 +49,18 @@ const zend_function_entry php_dom_documentfragment_class_functions[] = {
 	PHP_FE_END
 };
 
-/* {{{ proto void DOMDocumentFragment::__construct(); */
+/* {{{ proto void DOMDocumentFragment::__construct() */
 PHP_METHOD(domdocumentfragment, __construct)
 {
 
-	zval *id;
+	zval *id = getThis();
 	xmlNodePtr nodep = NULL, oldnode = NULL;
 	dom_object *intern;
-	zend_error_handling error_handling;
 
-	zend_replace_error_handling(EH_THROW, dom_domexception_class_entry, &error_handling);
-	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &id, dom_documentfragment_class_entry) == FAILURE) {
-		zend_restore_error_handling(&error_handling);
+	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "") == FAILURE) {
 		return;
 	}
 
-	zend_restore_error_handling(&error_handling);
 	nodep = xmlNewDocFragment(NULL);
 
 	if (!nodep) {
@@ -116,7 +112,7 @@ static void php_dom_xmlSetTreeDoc(xmlNodePtr tree, xmlDocPtr doc) /* {{{ */
 }
 /* }}} */
 
-/* {{{ proto void DOMDocumentFragment::appendXML(string data); */
+/* {{{ proto void DOMDocumentFragment::appendXML(string data) */
 PHP_METHOD(domdocumentfragment, appendXML) {
 	zval *id;
 	xmlNode *nodep;
@@ -142,7 +138,7 @@ PHP_METHOD(domdocumentfragment, appendXML) {
 		if (err != 0) {
 			RETURN_FALSE;
 		}
-		/* Following needed due to bug in libxml2 <= 2.6.14 
+		/* Following needed due to bug in libxml2 <= 2.6.14
 		ifdef after next libxml release as bug is fixed in their cvs */
 		php_dom_xmlSetTreeDoc(lst, nodep->doc);
 		/* End stupid hack */

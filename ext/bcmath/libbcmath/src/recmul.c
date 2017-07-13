@@ -26,7 +26,7 @@
                 Computer Science Department, 9062
                 Western Washington University
                 Bellingham, WA 98226-9062
-       
+
 *************************************************************************/
 
 #include <config.h>
@@ -57,17 +57,8 @@ new_sub_num (length, scale, value)
 {
   bc_num temp;
 
-#ifdef SANDER_0
-  if (_bc_Free_list != NULL) {
-    temp = _bc_Free_list;
-    _bc_Free_list = temp->n_next;
-  } else {
-#endif
-    temp = (bc_num) emalloc (sizeof(bc_struct));
-#ifdef SANDER_0
-    if (temp == NULL) bc_out_of_memory ();
-  }
-#endif
+  temp = (bc_num) emalloc (sizeof(bc_struct));
+
   temp->n_sign = PLUS;
   temp->n_len = length;
   temp->n_scale = scale;
@@ -122,7 +113,7 @@ _bc_shift_addsub (bc_num accum, bc_num val, int shift, int sub)
   if (val->n_value[0] == 0)
     count--;
   assert (accum->n_len+accum->n_scale >= shift+count);
-  
+
   /* Set up pointers and others */
   accp = (signed char *)(accum->n_value +
 			 accum->n_len + accum->n_scale - shift - 1);
@@ -170,8 +161,8 @@ _bc_shift_addsub (bc_num accum, bc_num val, int shift, int sub)
   }
 }
 
-/* Recursive divide and conquer multiply algorithm.  
-   Based on 
+/* Recursive divide and conquer multiply algorithm.
+   Based on
    Let u = u0 + u1*(b^n)
    Let v = v0 + v1*(b^n)
    Then uv = (B^2n+B^n)*u1*v1 + B^n*(u1-u0)*(v0-v1) + (B^n+1)*u0*v0
@@ -181,7 +172,7 @@ _bc_shift_addsub (bc_num accum, bc_num val, int shift, int sub)
 static void
 _bc_rec_mul (bc_num u, int ulen, bc_num v, int vlen, bc_num *prod,
 	     int full_scale)
-{ 
+{
   bc_num u0, u1, v0, v1;
   bc_num m1, m2, m3, d1, d2;
   int n, prodlen, m1zero;
@@ -277,7 +268,7 @@ _bc_rec_mul (bc_num u, int ulen, bc_num v, int vlen, bc_num *prod,
 void
 bc_multiply (bc_num n1, bc_num n2, bc_num *prod, int scale)
 {
-  bc_num pval; 
+  bc_num pval;
   int len1, len2;
   int full_scale, prod_scale;
 

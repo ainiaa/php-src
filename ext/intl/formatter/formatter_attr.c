@@ -252,7 +252,7 @@ PHP_FUNCTION( numfmt_get_symbol )
 	zend_long symbol;
 	UChar value_buf[4];
 	UChar *value = value_buf;
-	int32_t length = USIZE(value_buf);
+	uint32_t length = USIZE(value_buf);
 	FORMATTER_METHOD_INIT_VARS;
 
 	/* Parse parameters. */
@@ -264,7 +264,7 @@ PHP_FUNCTION( numfmt_get_symbol )
 
 		RETURN_FALSE;
 	}
-	
+
 	if(symbol >= UNUM_FORMAT_SYMBOL_COUNT || symbol < 0) {
 		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,	"numfmt_get_symbol: invalid symbol value", 0 );
 		RETURN_FALSE;
@@ -313,7 +313,7 @@ PHP_FUNCTION( numfmt_set_symbol )
 
 		RETURN_FALSE;
 	}
-	
+
 	if (symbol >= UNUM_FORMAT_SYMBOL_COUNT || symbol < 0) {
 		intl_error_set( NULL, U_ILLEGAL_ARGUMENT_ERROR,	"numfmt_set_symbol: invalid symbol value", 0 );
 		RETURN_FALSE;
@@ -345,7 +345,7 @@ PHP_FUNCTION( numfmt_set_symbol )
 PHP_FUNCTION( numfmt_get_pattern )
 {
 	UChar   value_buf[64];
-	int32_t length = USIZE( value_buf );
+	uint32_t length = USIZE( value_buf );
 	UChar*  value  = value_buf;
 	FORMATTER_METHOD_INIT_VARS;
 

@@ -2,10 +2,10 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        | 
+   | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
    | http://www.zend.com/license/2_00.txt.                                |
    | If you did not receive a copy of the Zend license and are unable to  |
@@ -59,7 +59,7 @@ static void end_write(TsHashTable *ht)
 }
 
 /* delegates */
-ZEND_API void _zend_ts_hash_init(TsHashTable *ht, uint nSize, dtor_func_t pDestructor, zend_bool persistent ZEND_FILE_LINE_DC)
+ZEND_API void _zend_ts_hash_init(TsHashTable *ht, uint32_t nSize, dtor_func_t pDestructor, zend_bool persistent ZEND_FILE_LINE_DC)
 {
 #ifdef ZTS
 	ht->mx_reader = tsrm_mutex_alloc();
@@ -69,7 +69,7 @@ ZEND_API void _zend_ts_hash_init(TsHashTable *ht, uint nSize, dtor_func_t pDestr
 	_zend_hash_init(TS_HASH(ht), nSize, pDestructor, persistent ZEND_FILE_LINE_RELAY_CC);
 }
 
-ZEND_API void _zend_ts_hash_init_ex(TsHashTable *ht, uint nSize, dtor_func_t pDestructor, zend_bool persistent, zend_bool bApplyProtection ZEND_FILE_LINE_DC)
+ZEND_API void _zend_ts_hash_init_ex(TsHashTable *ht, uint32_t nSize, dtor_func_t pDestructor, zend_bool persistent, zend_bool bApplyProtection ZEND_FILE_LINE_DC)
 {
 #ifdef ZTS
 	ht->mx_reader = tsrm_mutex_alloc();
@@ -281,7 +281,7 @@ ZEND_API int zend_ts_hash_sort(TsHashTable *ht, sort_func_t sort_func, compare_f
 	int retval;
 
 	begin_write(ht);
-	retval = zend_hash_sort(TS_HASH(ht), sort_func, compare_func, renumber);
+	retval = zend_hash_sort_ex(TS_HASH(ht), sort_func, compare_func, renumber);
 	end_write(ht);
 
 	return retval;

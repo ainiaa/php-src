@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -57,13 +57,16 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_dom_namednodemap_remove_named_item_ns, 0, 0, 0)
 	ZEND_ARG_INFO(0, namespaceURI)
 	ZEND_ARG_INFO(0, localName)
 ZEND_END_ARG_INFO();
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_dom_namednodemap_count, 0, 0, 0)
+ZEND_END_ARG_INFO();
 /* }}} */
 
 /*
-* class DOMNamedNodeMap 
+* class DOMNamedNodeMap
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-1780488922
-* Since: 
+* Since:
 */
 
 const zend_function_entry php_dom_namednodemap_class_functions[] = { /* {{{ */
@@ -74,14 +77,15 @@ const zend_function_entry php_dom_namednodemap_class_functions[] = { /* {{{ */
 	PHP_FALIAS(getNamedItemNS, dom_namednodemap_get_named_item_ns, arginfo_dom_namednodemap_get_named_item_ns)
 	PHP_FALIAS(setNamedItemNS, dom_namednodemap_set_named_item_ns, arginfo_dom_namednodemap_set_named_item_ns)
 	PHP_FALIAS(removeNamedItemNS, dom_namednodemap_remove_named_item_ns, arginfo_dom_namednodemap_remove_named_item_ns)
+	PHP_FALIAS(count, dom_namednodemap_count, arginfo_dom_namednodemap_count)
 	PHP_FE_END
 };
 /* }}} */
 
-/* {{{ length	int	
-readonly=yes 
+/* {{{ length	int
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-6D0FB19E
-Since: 
+Since:
 */
 int dom_namednodemap_length_read(dom_object *obj, zval *retval)
 {
@@ -93,7 +97,7 @@ int dom_namednodemap_length_read(dom_object *obj, zval *retval)
 	objmap = (dom_nnodemap_object *)obj->ptr;
 
 	if (objmap != NULL) {
-		if ((objmap->nodetype == XML_NOTATION_NODE) || 
+		if ((objmap->nodetype == XML_NOTATION_NODE) ||
 			objmap->nodetype == XML_ENTITY_NODE) {
 			if (objmap->ht) {
 				count = xmlHashSize(objmap->ht);
@@ -121,7 +125,7 @@ int dom_namednodemap_length_read(dom_object *obj, zval *retval)
 
 /* {{{ proto DOMNode dom_namednodemap_get_named_item(string name);
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-1074577549
-Since: 
+Since:
 */
 PHP_FUNCTION(dom_namednodemap_get_named_item)
 {
@@ -145,7 +149,7 @@ PHP_FUNCTION(dom_namednodemap_get_named_item)
 	objmap = (dom_nnodemap_object *)intern->ptr;
 
 	if (objmap != NULL) {
-		if ((objmap->nodetype == XML_NOTATION_NODE) || 
+		if ((objmap->nodetype == XML_NOTATION_NODE) ||
 			objmap->nodetype == XML_ENTITY_NODE) {
 			if (objmap->ht) {
 				if (objmap->nodetype == XML_ENTITY_NODE) {
@@ -176,7 +180,7 @@ PHP_FUNCTION(dom_namednodemap_get_named_item)
 
 /* {{{ proto DOMNode dom_namednodemap_set_named_item(DOMNode arg);
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-1025163788
-Since: 
+Since:
 */
 PHP_FUNCTION(dom_namednodemap_set_named_item)
 {
@@ -186,7 +190,7 @@ PHP_FUNCTION(dom_namednodemap_set_named_item)
 
 /* {{{ proto DOMNode dom_namednodemap_remove_named_item(string name);
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-D58B193
-Since: 
+Since:
 */
 PHP_FUNCTION(dom_namednodemap_remove_named_item)
 {
@@ -196,7 +200,7 @@ PHP_FUNCTION(dom_namednodemap_remove_named_item)
 
 /* {{{ proto DOMNode dom_namednodemap_item(int index);
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-349467F9
-Since: 
+Since:
 */
 PHP_FUNCTION(dom_namednodemap_item)
 {
@@ -214,12 +218,17 @@ PHP_FUNCTION(dom_namednodemap_item)
 		return;
 	}
 	if (index >= 0) {
+		if (ZEND_LONG_INT_OVFL(index)) {
+			php_error_docref(NULL, E_WARNING, "Invalid index");
+			RETURN_NULL();
+		}
+
 		intern = Z_DOMOBJ_P(id);
 
 		objmap = (dom_nnodemap_object *)intern->ptr;
 
 		if (objmap != NULL) {
-			if ((objmap->nodetype == XML_NOTATION_NODE) || 
+			if ((objmap->nodetype == XML_NOTATION_NODE) ||
 				objmap->nodetype == XML_ENTITY_NODE) {
 				if (objmap->ht) {
 					if (objmap->nodetype == XML_ENTITY_NODE) {
@@ -278,7 +287,7 @@ PHP_FUNCTION(dom_namednodemap_get_named_item_ns)
 	objmap = (dom_nnodemap_object *)intern->ptr;
 
 	if (objmap != NULL) {
-		if ((objmap->nodetype == XML_NOTATION_NODE) || 
+		if ((objmap->nodetype == XML_NOTATION_NODE) ||
 			objmap->nodetype == XML_ENTITY_NODE) {
 			if (objmap->ht) {
 				if (objmap->nodetype == XML_ENTITY_NODE) {
@@ -326,6 +335,24 @@ PHP_FUNCTION(dom_namednodemap_remove_named_item_ns)
  DOM_NOT_IMPLEMENTED();
 }
 /* }}} end dom_namednodemap_remove_named_item_ns */
+
+/* {{{ proto int|bool dom_namednodemap_count();
+*/
+PHP_FUNCTION(dom_namednodemap_count)
+{
+	zval *id;
+	dom_object *intern;
+
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &id, dom_namednodemap_class_entry) == FAILURE) {
+		return;
+	}
+
+	intern = Z_DOMOBJ_P(id);
+	if(dom_namednodemap_length_read(intern, return_value) == FAILURE) {
+		RETURN_FALSE;
+	}
+}
+/* }}} end dom_namednodemap_count */
 
 #endif
 

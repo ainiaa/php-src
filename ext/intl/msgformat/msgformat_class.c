@@ -33,13 +33,6 @@ static zend_object_handlers MessageFormatter_handlers;
  * Auxiliary functions needed by objects of 'MessageFormatter' class
  */
 
-/* {{{ MessageFormatter_objects_dtor */
-static void MessageFormatter_object_dtor(zend_object *object )
-{
-	zend_objects_destroy_object( object );
-}
-/* }}} */
-
 /* {{{ MessageFormatter_objects_free */
 void MessageFormatter_object_free( zend_object *object )
 {
@@ -56,7 +49,7 @@ zend_object *MessageFormatter_object_create(zend_class_entry *ce)
 {
 	MessageFormatter_object*     intern;
 
-	intern = ecalloc( 1, sizeof(MessageFormatter_object) + sizeof(zval) * (ce->default_properties_count - 1));
+	intern = ecalloc( 1, sizeof(MessageFormatter_object) + zend_object_properties_size(ce));
 	msgformat_data_init( &intern->mf_data );
 	zend_object_std_init( &intern->zo, ce );
 	object_properties_init(&intern->zo, ce);
@@ -76,7 +69,7 @@ zend_object *MessageFormatter_object_clone(zval *object)
 	MSG_FORMAT_METHOD_FETCH_OBJECT_NO_CHECK;
 	new_obj = MessageFormatter_ce_ptr->create_object(Z_OBJCE_P(object));
 	new_mfo = php_intl_messageformatter_fetch_object(new_obj);
-	/* clone standard parts */	
+	/* clone standard parts */
 	zend_objects_clone_members(&new_mfo->zo, &mfo->zo);
 
 	/* clone formatter object */
@@ -163,7 +156,6 @@ void msgformat_register_class( void )
 		sizeof MessageFormatter_handlers);
 	MessageFormatter_handlers.offset = XtOffsetOf(MessageFormatter_object, zo);
 	MessageFormatter_handlers.clone_obj = MessageFormatter_object_clone;
-	MessageFormatter_handlers.dtor_obj = MessageFormatter_object_dtor;
 	MessageFormatter_handlers.free_obj = MessageFormatter_object_free;
 
 

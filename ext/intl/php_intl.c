@@ -85,6 +85,7 @@
 #include "breakiterator/breakiterator_iterators.h"
 
 #include "idn/idn.h"
+#include "uchar/uchar.h"
 
 #if U_ICU_VERSION_MAJOR_NUM * 1000 + U_ICU_VERSION_MINOR_NUM >= 4002
 # include "spoofchecker/spoofchecker_class.h"
@@ -132,11 +133,6 @@ ZEND_BEGIN_ARG_INFO_EX(collator_static_1_arg, 0, 0, 1)
 	ZEND_ARG_INFO(0, arg1)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(collator_static_2_args, 0, 0, 2)
-	ZEND_ARG_INFO(0, arg1)
-	ZEND_ARG_INFO(0, arg2)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(collator_0_args, 0, 0, 1)
 	ZEND_ARG_OBJ_INFO(0, object, Collator, 0)
 ZEND_END_ARG_INFO()
@@ -156,6 +152,11 @@ ZEND_BEGIN_ARG_INFO_EX(collator_sort_args, 0, 0, 2)
 	ZEND_ARG_OBJ_INFO(0, object, Collator, 0)
 	ZEND_ARG_ARRAY_INFO(1, arr, 0)
 	ZEND_ARG_INFO(0, sort_flags)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(collator_sort_with_sort_keys_args, 0, 0, 2)
+	ZEND_ARG_OBJ_INFO(0, coll, Collator, 0)
+	ZEND_ARG_ARRAY_INFO(1, arr, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(numfmt_parse_arginfo, 0, 0, 2)
@@ -377,13 +378,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_idn_to_ascii, 0, 0, 1)
 	ZEND_ARG_INFO(1, idn_info)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_idn_to_utf8, 0, 0, 1)
-	ZEND_ARG_INFO(0, domain)
-	ZEND_ARG_INFO(0, option)
-	ZEND_ARG_INFO(0, variant)
-	ZEND_ARG_INFO(1, idn_info)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX( arginfo_resourcebundle_create_proc, 0, 0, 2 )
 	ZEND_ARG_INFO( 0, locale )
 	ZEND_ARG_INFO( 0, bundlename )
@@ -450,10 +444,6 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX( arginfo_tz_create_enumeration, 0, 0, 0 )
 	ZEND_ARG_INFO( 0, countryOrRawOffset )
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX( arginfo_tz_count_equivalent_ids, 0, 0, 1 )
-	ZEND_ARG_INFO( 0, zoneId )
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX( arginfo_tz_create_time_zone_id_enumeration, 0, 0, 1 )
@@ -644,12 +634,12 @@ zend_function_entry intl_functions[] = {
 	PHP_FE( collator_get_strength, collator_0_args )
 	PHP_FE( collator_set_strength, collator_1_arg )
 	PHP_FE( collator_sort, collator_sort_args )
-	PHP_FE( collator_sort_with_sort_keys, collator_sort_args )
+	PHP_FE( collator_sort_with_sort_keys, collator_sort_with_sort_keys_args )
 	PHP_FE( collator_asort, collator_sort_args )
 	PHP_FE( collator_get_locale, collator_1_arg )
 	PHP_FE( collator_get_error_code, collator_0_args )
 	PHP_FE( collator_get_error_message, collator_0_args )
-	PHP_FE( collator_get_sort_key, collator_2_args )
+	PHP_FE( collator_get_sort_key, collator_1_arg )
 
 	/* formatter functions */
 	PHP_FE( numfmt_create, arginfo_numfmt_create )
@@ -714,7 +704,6 @@ zend_function_entry intl_functions[] = {
 	PHP_FE( datefmt_set_calendar, arginfo_datefmt_set_calendar )
 	PHP_FE( datefmt_get_locale, arginfo_msgfmt_get_locale )
 	PHP_FE( datefmt_get_timezone_id, arginfo_msgfmt_get_locale )
-	PHP_FE( datefmt_set_timezone_id, arginfo_datefmt_set_timezone )
 	PHP_FE( datefmt_get_timezone, arginfo_msgfmt_get_locale )
 	PHP_FE( datefmt_set_timezone, arginfo_datefmt_set_timezone )
 	PHP_FE( datefmt_get_pattern, arginfo_msgfmt_get_locale )
@@ -750,7 +739,7 @@ zend_function_entry intl_functions[] = {
 	PHP_FE( resourcebundle_locales, arginfo_resourcebundle_locales_proc )
 	PHP_FE( resourcebundle_get_error_code, arginfo_resourcebundle_get_error_code_proc )
 	PHP_FE( resourcebundle_get_error_message, arginfo_resourcebundle_get_error_message_proc )
-	
+
 	/* Transliterator functions */
 	PHP_FE( transliterator_create, arginfo_transliterator_create )
 	PHP_FE( transliterator_create_from_rules, arginfo_transliterator_create_from_rules )
@@ -873,9 +862,7 @@ static PHP_GINIT_FUNCTION(intl);
 
 /* {{{ intl_module_entry */
 zend_module_entry intl_module_entry = {
-#if ZEND_MODULE_API_NO >= 20010901
 	STANDARD_MODULE_HEADER,
-#endif
 	"intl",
 	intl_functions,
 	PHP_MINIT( intl ),
@@ -894,7 +881,7 @@ zend_module_entry intl_module_entry = {
 
 #ifdef COMPILE_DL_INTL
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE()
 #endif
 ZEND_GET_MODULE( intl )
 #endif
@@ -903,7 +890,7 @@ ZEND_GET_MODULE( intl )
 static PHP_GINIT_FUNCTION(intl)
 {
 #if defined(COMPILE_DL_INTL) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	memset( intl_globals, 0, sizeof(zend_intl_globals) );
 }
@@ -920,7 +907,7 @@ PHP_MINIT_FUNCTION( intl )
 	REGISTER_STRING_CONSTANT("INTL_ICU_VERSION", U_ICU_VERSION, CONST_PERSISTENT | CONST_CS);
 #ifdef U_ICU_DATA_VERSION
 	REGISTER_STRING_CONSTANT("INTL_ICU_DATA_VERSION", U_ICU_DATA_VERSION, CONST_PERSISTENT | CONST_CS);
-#endif	
+#endif
 
 	/* Register 'Collator' PHP class */
 	collator_register_Collator_class(  );
@@ -1002,6 +989,9 @@ PHP_MINIT_FUNCTION( intl )
 
 	/* 'Converter' class for codepage conversions */
 	php_converter_minit(INIT_FUNC_ARGS_PASSTHRU);
+
+	/* IntlChar class */
+	php_uchar_minit(INIT_FUNC_ARGS_PASSTHRU);
 
 	return SUCCESS;
 }

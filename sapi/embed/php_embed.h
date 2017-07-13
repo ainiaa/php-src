@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -41,14 +41,14 @@
 #ifndef PHP_WIN32
     #define EMBED_SAPI_API SAPI_API
 #else
-    #define EMBED_SAPI_API 
-#endif 
-
-#ifdef ZTS
-ZEND_TSRMLS_CACHE_EXTERN;
+    #define EMBED_SAPI_API
 #endif
 
-BEGIN_EXTERN_C() 
+#ifdef ZTS
+ZEND_TSRMLS_CACHE_EXTERN()
+#endif
+
+BEGIN_EXTERN_C()
 EMBED_SAPI_API int php_embed_init(int argc, char **argv);
 EMBED_SAPI_API void php_embed_shutdown(void);
 extern EMBED_SAPI_API sapi_module_struct php_embed_module;

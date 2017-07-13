@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -31,7 +31,7 @@
 void spl_register_interface(zend_class_entry ** ppce, char * class_name, const zend_function_entry * functions)
 {
 	zend_class_entry ce;
-	
+
 	INIT_CLASS_ENTRY_EX(ce, class_name, strlen(class_name), functions);
 	*ppce = zend_register_internal_interface(&ce);
 }
@@ -41,7 +41,7 @@ void spl_register_interface(zend_class_entry ** ppce, char * class_name, const z
 PHPAPI void spl_register_std_class(zend_class_entry ** ppce, char * class_name, void * obj_ctor, const zend_function_entry * function_list)
 {
 	zend_class_entry ce;
-	
+
 	INIT_CLASS_ENTRY_EX(ce, class_name, strlen(class_name), function_list);
 	*ppce = zend_register_internal_class(&ce);
 
@@ -56,7 +56,7 @@ PHPAPI void spl_register_std_class(zend_class_entry ** ppce, char * class_name, 
 PHPAPI void spl_register_sub_class(zend_class_entry ** ppce, zend_class_entry * parent_ce, char * class_name, void *obj_ctor, const zend_function_entry * function_list)
 {
 	zend_class_entry ce;
-	
+
 	INIT_CLASS_ENTRY_EX(ce, class_name, strlen(class_name), function_list);
 	*ppce = zend_register_internal_class_ex(&ce, parent_ce);
 
@@ -106,7 +106,7 @@ void spl_add_interfaces(zval *list, zend_class_entry * pce, int allow, int ce_fl
 void spl_add_traits(zval *list, zend_class_entry * pce, int allow, int ce_flags)
 {
 	uint32_t num_traits;
-  
+
 	for (num_traits = 0; num_traits < pce->num_traits; num_traits++) {
 		spl_add_class_name(list, pce->traits[num_traits], allow, ce_flags);
 	}
@@ -134,7 +134,7 @@ int spl_add_classes(zend_class_entry *pce, zval *list, int sub, int allow, int c
 
 zend_string * spl_gen_private_prop_name(zend_class_entry *ce, char *prop_name, int prop_len) /* {{{ */
 {
-	return zend_mangle_property_name(ce->name->val, ce->name->len, prop_name, prop_len, 0);
+	return zend_mangle_property_name(ZSTR_VAL(ce->name), ZSTR_LEN(ce->name), prop_name, prop_len, 0);
 }
 /* }}} */
 

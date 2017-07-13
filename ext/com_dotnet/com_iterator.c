@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -44,7 +44,7 @@ struct php_com_iterator {
 static void com_iter_dtor(zend_object_iterator *iter)
 {
 	struct php_com_iterator *I = (struct php_com_iterator*)Z_PTR(iter->data);
-	
+
 	if (I->ev) {
 		IEnumVARIANT_Release(I->ev);
 	}
@@ -157,7 +157,7 @@ zend_object_iterator *php_com_iter_get(zend_class_entry *ce, zval *object, int b
 	}
 
 	memset(&dp, 0, sizeof(dp));
-	VariantInit(&v);	
+	VariantInit(&v);
 
 	I = (struct php_com_iterator*)ecalloc(1, sizeof(*I));
 	zend_iterator_init(&I->iter);
@@ -171,7 +171,7 @@ zend_object_iterator *php_com_iter_get(zend_class_entry *ce, zval *object, int b
 	if (V_ISARRAY(&obj->v)) {
 		LONG bound;
 		UINT dims;
-	
+
 		dims = SafeArrayGetDim(V_ARRAY(&obj->v));
 
 		if (dims != 1) {
@@ -179,7 +179,7 @@ zend_object_iterator *php_com_iter_get(zend_class_entry *ce, zval *object, int b
 				   "Can only handle single dimension variant arrays (this array has %d)", dims);
 			goto fail;
 		}
-		
+
 		/* same semantics as foreach on a PHP array;
 		 * make a copy and enumerate that copy */
 		VariantCopy(&I->safe_array, &obj->v);
@@ -197,7 +197,7 @@ zend_object_iterator *php_com_iter_get(zend_class_entry *ce, zval *object, int b
 		} else {
 			I->key = (ulong)-1;
 		}
-		
+
 	} else {
 		/* can we enumerate it? */
 		if (FAILED(IDispatch_Invoke(V_DISPATCH(&obj->v), DISPID_NEWENUM,
@@ -218,7 +218,7 @@ zend_object_iterator *php_com_iter_get(zend_class_entry *ce, zval *object, int b
 		if (iev == NULL) {
 			goto fail;
 		}
-	
+
 		I->ev = iev;
 
 		/* Get the first element now */

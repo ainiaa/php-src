@@ -30,16 +30,6 @@
 #include "php.h"
 #include "php_string.h"
 
-#if defined(__GNUC__)
-#  define UNUSED __attribute__((__unused__))
-#else
-#  define UNUSED
-#endif
-
-#if 0
-static char const *version UNUSED =
-    "$Id$";
-#endif
 /* {{{ compare_right
  */
 static int
@@ -92,7 +82,7 @@ compare_left(char const **a, char const *aend, char const **b, char const *bend)
 		 else if (**a > **b)
 			 return +1;
      }
-	  
+
      return 0;
 }
 /* }}} */

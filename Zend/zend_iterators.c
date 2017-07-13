@@ -2,10 +2,10 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        | 
+   | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
    | http://www.zend.com/license/2_00.txt.                                |
    | If you did not receive a copy of the Zend license and are unable to  |
@@ -81,7 +81,7 @@ ZEND_API void zend_iterator_init(zend_object_iterator *iter)
 
 ZEND_API void zend_iterator_dtor(zend_object_iterator *iter)
 {
-	if (--GC_REFCOUNT(iter) > 0) {
+	if (--GC_REFCOUNT(&iter->std) > 0) {
 		return;
 	}
 
@@ -90,8 +90,8 @@ ZEND_API void zend_iterator_dtor(zend_object_iterator *iter)
 
 ZEND_API zend_object_iterator* zend_iterator_unwrap(zval *array_ptr)
 {
-	if (Z_TYPE_P(array_ptr) &&
-	    Z_OBJ_HT_P(array_ptr) == &iterator_object_handlers) {
+	ZEND_ASSERT(Z_TYPE_P(array_ptr) == IS_OBJECT);
+	if (Z_OBJ_HT_P(array_ptr) == &iterator_object_handlers) {
 		return (zend_object_iterator *)Z_OBJ_P(array_ptr);
 	}
 	return NULL;
@@ -103,4 +103,6 @@ ZEND_API zend_object_iterator* zend_iterator_unwrap(zval *array_ptr)
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

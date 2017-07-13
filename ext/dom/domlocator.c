@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -29,7 +29,7 @@
 
 
 /*
-* class domlocator 
+* class domlocator
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#Interfaces-DOMLocator
 * Since: DOM Level 3
@@ -41,10 +41,10 @@ const zend_function_entry php_dom_domlocator_class_functions[] = {
 
 /* {{{ attribute protos, not implemented yet */
 
-/* {{{ line_number	long	
-readonly=yes 
+/* {{{ line_number	long
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#DOMLocator-line-number
-Since: 
+Since:
 */
 int dom_domlocator_line_number_read(dom_object *obj, zval *retval)
 {
@@ -54,10 +54,10 @@ int dom_domlocator_line_number_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ column_number	long	
-readonly=yes 
+/* {{{ column_number	long
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#DOMLocator-column-number
-Since: 
+Since:
 */
 int dom_domlocator_column_number_read(dom_object *obj, zval *retval)
 {
@@ -67,10 +67,10 @@ int dom_domlocator_column_number_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ offset	long	
-readonly=yes 
+/* {{{ offset	long
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#DOMLocator-offset
-Since: 
+Since:
 */
 int dom_domlocator_offset_read(dom_object *obj, zval *retval)
 {
@@ -80,10 +80,10 @@ int dom_domlocator_offset_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ related_node	node	
-readonly=yes 
+/* {{{ related_node	node
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#DOMLocator-node
-Since: 
+Since:
 */
 int dom_domlocator_related_node_read(dom_object *obj, zval *retval)
 {
@@ -93,10 +93,10 @@ int dom_domlocator_related_node_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ uri	string	
-readonly=yes 
+/* {{{ uri	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#DOMLocator-uri
-Since: 
+Since:
 */
 int dom_domlocator_uri_read(dom_object *obj, zval *retval)
 {

@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -47,12 +47,8 @@ static const zend_module_dep xsl_deps[] = {
 /* {{{ xsl_module_entry
  */
 zend_module_entry xsl_module_entry = {
-#if ZEND_MODULE_API_NO >= 20050617
 	STANDARD_MODULE_HEADER_EX, NULL,
 	xsl_deps,
-#elif ZEND_MODULE_API_NO >= 20010901
-	STANDARD_MODULE_HEADER,
-#endif
 	"xsl",
 	xsl_functions,
 	PHP_MINIT(xsl),
@@ -60,9 +56,7 @@ zend_module_entry xsl_module_entry = {
 	NULL,
 	NULL,
 	PHP_MINFO(xsl),
-#if ZEND_MODULE_API_NO >= 20010901
-	"0.1", /* Replace with version number for your extension */
-#endif
+	PHP_XSL_VERSION,
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -80,10 +74,10 @@ void xsl_objects_free_storage(zend_object *object)
 
 	zend_hash_destroy(intern->parameter);
 	FREE_HASHTABLE(intern->parameter);
-	
+
 	zend_hash_destroy(intern->registered_phpfunctions);
 	FREE_HASHTABLE(intern->registered_phpfunctions);
-	
+
 	if (intern->node_list) {
 		zend_hash_destroy(intern->node_list);
 		FREE_HASHTABLE(intern->node_list);
@@ -97,7 +91,7 @@ void xsl_objects_free_storage(zend_object *object)
 	if (intern->ptr) {
 		/* free wrapper */
 		if (((xsltStylesheetPtr) intern->ptr)->_private != NULL) {
-			((xsltStylesheetPtr) intern->ptr)->_private = NULL;   
+			((xsltStylesheetPtr) intern->ptr)->_private = NULL;
 		}
 
 		xsltFreeStylesheet((xsltStylesheetPtr) intern->ptr);
@@ -114,7 +108,7 @@ zend_object *xsl_objects_new(zend_class_entry *class_type)
 {
 	xsl_object *intern;
 
-	intern = ecalloc(1, sizeof(xsl_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(xsl_object) + zend_object_properties_size(class_type));
 	intern->securityPrefs = XSL_SECPREF_DEFAULT;
 
 	zend_object_std_init(&intern->std, class_type);
@@ -129,20 +123,13 @@ zend_object *xsl_objects_new(zend_class_entry *class_type)
 }
 /* }}} */
 
-PHP_INI_BEGIN()
-/* Default is not allowing any write operations. 
-   XSL_SECPREF_CREATE_DIRECTORY | XSL_SECPREF_WRITE_NETWORK | XSL_SECPREF_WRITE_FILE == 44 
-*/
-PHP_INI_ENTRY("xsl.security_prefs", "44", PHP_INI_ALL, NULL)
-PHP_INI_END()
-
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(xsl)
 {
-	
+
 	zend_class_entry ce;
-	
+
 	memcpy(&xsl_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	xsl_object_handlers.offset = XtOffsetOf(xsl_object, std);
 	xsl_object_handlers.clone_obj = NULL;
@@ -152,7 +139,7 @@ PHP_MINIT_FUNCTION(xsl)
 #if HAVE_XSL_EXSLT
 	exsltRegisterAll();
 #endif
- 
+
 	xsltRegisterExtModuleFunction ((const xmlChar *) "functionString",
 				   (const xmlChar *) "http://php.net/xsl",
 				   xsl_ext_function_string_php);
@@ -180,8 +167,6 @@ PHP_MINIT_FUNCTION(xsl)
 	REGISTER_LONG_CONSTANT("LIBEXSLT_VERSION",           LIBEXSLT_VERSION,            CONST_CS | CONST_PERSISTENT);
 	REGISTER_STRING_CONSTANT("LIBEXSLT_DOTTED_VERSION",  LIBEXSLT_DOTTED_VERSION,     CONST_CS | CONST_PERSISTENT);
 #endif
-
-    REGISTER_INI_ENTRIES();
 
 	return SUCCESS;
 }
@@ -237,7 +222,7 @@ void php_xsl_create_object(xsltStylesheetPtr obj, zval *wrapper_in, zval *return
 		wrapper = wrapper_in;
 	}
 
-	
+
 	ce = xsl_xsltprocessor_class_entry;
 
 	if (!wrapper_in) {
@@ -259,8 +244,6 @@ PHP_MSHUTDOWN_FUNCTION(xsl)
 				   (const xmlChar *) "http://php.net/xsl");
 	xsltSetGenericErrorFunc(NULL, NULL);
 	xsltCleanupGlobals();
-
-	UNREGISTER_INI_ENTRIES();
 
 	return SUCCESS;
 }

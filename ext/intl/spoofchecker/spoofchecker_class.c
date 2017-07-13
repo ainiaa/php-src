@@ -29,13 +29,6 @@ static zend_object_handlers Spoofchecker_handlers;
  * Auxiliary functions needed by objects of 'Spoofchecker' class
  */
 
-/* {{{ Spoofchecker_objects_dtor */
-static void Spoofchecker_objects_dtor(zend_object *object)
-{
-	zend_objects_destroy_object(object);
-}
-/* }}} */
-
 /* {{{ Spoofchecker_objects_free */
 void Spoofchecker_objects_free(zend_object *object)
 {
@@ -53,7 +46,7 @@ zend_object *Spoofchecker_object_create(
 {
 	Spoofchecker_object*     intern;
 
-	intern = ecalloc(1, sizeof(Spoofchecker_object) + sizeof(zval) * (ce->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(Spoofchecker_object) + zend_object_properties_size(ce));
 	intl_error_init(SPOOFCHECKER_ERROR_P(intern));
 	zend_object_std_init(&intern->zo, ce);
 	object_properties_init(&intern->zo, ce);
@@ -117,14 +110,14 @@ static zend_object *spoofchecker_clone_obj(zval *object) /* {{{ */
 
 	new_obj_val = Spoofchecker_ce_ptr->create_object(Z_OBJCE_P(object));
 	new_sfo = php_intl_spoofchecker_fetch_object(new_obj_val);
-	/* clone standard parts */	
+	/* clone standard parts */
 	zend_objects_clone_members(&new_sfo->zo, &sfo->zo);
 	/* clone internal object */
 	new_sfo->uspoof = uspoof_clone(sfo->uspoof, SPOOFCHECKER_ERROR_CODE_P(new_sfo));
 	if(U_FAILURE(SPOOFCHECKER_ERROR_CODE(new_sfo))) {
 		/* set up error in case error handler is interested */
 		intl_error_set( NULL, SPOOFCHECKER_ERROR_CODE(new_sfo), "Failed to clone SpoofChecker object", 0 );
-		Spoofchecker_objects_dtor(&new_sfo->zo); /* free new object */
+		Spoofchecker_objects_free(&new_sfo->zo); /* free new object */
 		zend_error(E_ERROR, "Failed to clone SpoofChecker object");
 	}
 	return new_obj_val;
@@ -146,8 +139,7 @@ void spoofchecker_register_Spoofchecker_class(void)
 	memcpy(&Spoofchecker_handlers, zend_get_std_object_handlers(),
 		sizeof Spoofchecker_handlers);
 	Spoofchecker_handlers.offset = XtOffsetOf(Spoofchecker_object, zo);
-	Spoofchecker_handlers.clone_obj = spoofchecker_clone_obj; 
-	Spoofchecker_handlers.dtor_obj = Spoofchecker_objects_dtor;
+	Spoofchecker_handlers.clone_obj = spoofchecker_clone_obj;
 	Spoofchecker_handlers.free_obj = Spoofchecker_objects_free;
 
 	if (!Spoofchecker_ce_ptr) {

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -28,6 +28,10 @@
 #include "zend_globals.h"
 #include <zend_ini_parser.h>
 #include "zend_ini_scanner.h"
+
+#ifdef YYDEBUG
+#undef YYDEBUG
+#endif
 
 #if 0
 # define YYDEBUG(s, c) printf("state: %d char: %c\n", s, c)
@@ -106,9 +110,11 @@ ZEND_API ts_rsrc_id ini_scanner_globals_id;
 ZEND_API zend_ini_scanner_globals ini_scanner_globals;
 #endif
 
+#define ZEND_SYSTEM_INI CG(ini_parser_unbuffered_errors)
+
 /* Eat leading whitespace */
 #define EAT_LEADING_WHITESPACE()                     \
-	while (yytext[0]) {                              \
+	while (yyleng) {                                 \
 		if (yytext[0] == ' ' || yytext[0] == '\t') { \
 			SCNG(yy_text)++;                         \
 			yyleng--;                                \
@@ -119,7 +125,7 @@ ZEND_API zend_ini_scanner_globals ini_scanner_globals;
 
 /* Eat trailing whitespace + extra char */
 #define EAT_TRAILING_WHITESPACE_EX(ch)              \
-	while (yyleng > 0 && (                          \
+	while (yyleng && (                              \
 		(ch != 'X' && yytext[yyleng - 1] ==  ch) || \
 		yytext[yyleng - 1] == '\n' ||               \
 		yytext[yyleng - 1] == '\r' ||               \
@@ -133,7 +139,7 @@ ZEND_API zend_ini_scanner_globals ini_scanner_globals;
 #define EAT_TRAILING_WHITESPACE()	EAT_TRAILING_WHITESPACE_EX('X')
 
 #define zend_ini_copy_value(retval, str, len)	\
-	ZVAL_NEW_STR(retval, zend_string_init(str, len, 1))
+	ZVAL_NEW_STR(retval, zend_string_init(str, len, ZEND_SYSTEM_INI))
 
 
 #define RETURN_TOKEN(type, str, len) {                       \
@@ -251,7 +257,7 @@ void shutdown_ini_scanner(void)
 
 /* {{{ zend_ini_scanner_get_lineno()
 */
-int zend_ini_scanner_get_lineno(void)
+ZEND_COLD int zend_ini_scanner_get_lineno(void)
 {
 	return SCNG(lineno);
 }
@@ -259,7 +265,7 @@ int zend_ini_scanner_get_lineno(void)
 
 /* {{{ zend_ini_scanner_get_filename()
 */
-char *zend_ini_scanner_get_filename(void)
+ZEND_COLD char *zend_ini_scanner_get_filename(void)
 {
 	return ini_filename ? ini_filename : "Unknown";
 }
@@ -402,9 +408,9 @@ SECTION_VALUE_CHARS ([^$\n\r;"'\]\\]|("\\"{ANY_CHAR})|{LITERAL_DOLLAR})
 <INITIAL>"[" { /* Section start */
 	/* Enter section data lookup state */
 	if (SCNG(scanner_mode) == ZEND_INI_SCANNER_RAW) {
-		yy_push_state(ST_SECTION_RAW);
+		BEGIN(ST_SECTION_RAW);
 	} else {
-		yy_push_state(ST_SECTION_VALUE);
+		BEGIN(ST_SECTION_VALUE);
 	}
 	return TC_SECTION;
 }
@@ -427,12 +433,12 @@ SECTION_VALUE_CHARS ([^$\n\r;"'\]\\]|("\\"{ANY_CHAR})|{LITERAL_DOLLAR})
 <INITIAL>{LABEL}"["{TABS_AND_SPACES}* { /* Start of option with offset */
 	/* Eat leading whitespace */
 	EAT_LEADING_WHITESPACE();
-	
+
 	/* Eat trailing whitespace and [ */
 	EAT_TRAILING_WHITESPACE_EX('[');
 
 	/* Enter offset lookup state */
-	yy_push_state(ST_OFFSET);
+	BEGIN(ST_OFFSET);
 
 	RETURN_TOKEN(TC_OFFSET, yytext, yyleng);
 }
@@ -486,9 +492,9 @@ SECTION_VALUE_CHARS ([^$\n\r;"'\]\\]|("\\"{ANY_CHAR})|{LITERAL_DOLLAR})
 
 <INITIAL>{TABS_AND_SPACES}*[=]{TABS_AND_SPACES}* { /* Start option value */
 	if (SCNG(scanner_mode) == ZEND_INI_SCANNER_RAW) {
-		yy_push_state(ST_RAW);
+		BEGIN(ST_RAW);
 	} else {
-		yy_push_state(ST_VALUE);
+		BEGIN(ST_VALUE);
 	}
 	return '=';
 }
@@ -520,7 +526,7 @@ end_raw_value_chars:
 	}
 
 	/* Eat leading and trailing double quotes */
-	if (yytext[0] == '"' && yytext[yyleng - 1] == '"') {
+	if (yyleng > 1 && yytext[0] == '"' && yytext[yyleng - 1] == '"') {
 		SCNG(yy_text)++;
 		yyleng = yyleng - 2;
 	} else if (sc) {
@@ -584,7 +590,7 @@ end_raw_value_chars:
 	if (YYCURSOR > YYLIMIT) {
 		return 0;
 	}
-	
+
 	while (YYCURSOR < YYLIMIT) {
 		switch (*YYCURSOR++) {
 			case '"':
@@ -605,13 +611,13 @@ end_raw_value_chars:
 			default:
 				continue;
 		}
-		
+
 		YYCURSOR--;
 		break;
 	}
 
 	yyleng = YYCURSOR - SCNG(yy_text);
-	
+
 	zend_ini_escape_string(ini_lval, yytext, yyleng, '"');
 	return TC_QUOTED_STRING;
 }
@@ -631,13 +637,6 @@ end_raw_value_chars:
 }
 
 <INITIAL,ST_VALUE,ST_RAW>{TABS_AND_SPACES}*[;][^\r\n]*{NEWLINE} { /* Comment */
-	BEGIN(INITIAL);
-	SCNG(lineno)++;
-	return END_OF_LINE;
-}
-
-<INITIAL>{TABS_AND_SPACES}*[#][^\r\n]*{NEWLINE} { /* #Comment */
-	zend_error(E_DEPRECATED, "Comments starting with '#' are deprecated in %s on line %d", zend_ini_scanner_get_filename(), SCNG(lineno));
 	BEGIN(INITIAL);
 	SCNG(lineno)++;
 	return END_OF_LINE;

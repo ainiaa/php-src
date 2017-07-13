@@ -61,7 +61,7 @@ zend_object *IntlDateFormatter_object_create(zend_class_entry *ce)
 {
 	IntlDateFormatter_object*     intern;
 
-	intern = ecalloc( 1, sizeof(IntlDateFormatter_object) + sizeof(zval) * (ce->default_properties_count - 1) );
+	intern = ecalloc( 1, sizeof(IntlDateFormatter_object) + zend_object_properties_size(ce));
 	dateformat_data_init( &intern->datef_data );
 	zend_object_std_init( &intern->zo, ce );
 	object_properties_init(&intern->zo, ce);
@@ -87,7 +87,7 @@ zend_object *IntlDateFormatter_object_clone(zval *object)
 
 	new_obj = IntlDateFormatter_ce_ptr->create_object(Z_OBJCE_P(object));
 	new_dfo = php_intl_dateformatter_fetch_object(new_obj);
-	/* clone standard parts */	
+	/* clone standard parts */
 	zend_objects_clone_members(&new_dfo->zo, &dfo->zo);
 	/* clone formatter object */
 	if (dfo->datef_data.udatf != NULL) {
@@ -105,7 +105,7 @@ zend_object *IntlDateFormatter_object_clone(zval *object)
 }
 /* }}} */
 
-/* 
+/*
  * 'IntlDateFormatter' class registration structures & functions
  */
 
@@ -167,7 +167,6 @@ static zend_function_entry IntlDateFormatter_class_functions[] = {
 	PHP_NAMED_FE( getCalendarObject, ZEND_FN( datefmt_get_calendar_object ), arginfo_intldateformatter_getdatetype )
 	PHP_NAMED_FE( setCalendar, ZEND_FN( datefmt_set_calendar ), arginfo_intldateformatter_setcalendar )
 	PHP_NAMED_FE( getTimeZoneId, ZEND_FN( datefmt_get_timezone_id ), arginfo_intldateformatter_getdatetype )
-	PHP_NAMED_FE( setTimeZoneId, ZEND_FN( datefmt_set_timezone_id ), arginfo_intldateformatter_settimezoneid )
 	PHP_NAMED_FE( getTimeZone, ZEND_FN( datefmt_get_timezone ), arginfo_intldateformatter_getdatetype )
 	PHP_NAMED_FE( setTimeZone, ZEND_FN( datefmt_set_timezone ), arginfo_intldateformatter_settimezoneid )
 	PHP_NAMED_FE( setPattern, ZEND_FN( datefmt_set_pattern ), arginfo_intldateformatter_setpattern )

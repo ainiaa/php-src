@@ -18,10 +18,11 @@
 #include "config.h"
 #endif
 
+#include "../php_intl.h"
+
 #include <unicode/ustring.h>
 #include <unicode/ucal.h>
 
-#include "../php_intl.h"
 #include "../intl_convert.h"
 #include "../common/common_date.h"
 #include "dateformat.h"
@@ -29,19 +30,19 @@
 #include "dateformat_format.h"
 #include "dateformat_data.h"
 
-/* {{{ 
+/* {{{
  * Internal function which calls the udat_format
 */
 static void internal_format(IntlDateFormatter_object *dfo, UDate timestamp, zval *return_value)
 {
 	UChar* 	formatted =  NULL;
 	int32_t	resultlengthneeded =0 ;
-	
+
 	resultlengthneeded=udat_format( DATE_FORMAT_OBJECT(dfo), timestamp, NULL, resultlengthneeded, NULL, &INTL_DATA_ERROR_CODE(dfo));
 	if(INTL_DATA_ERROR_CODE(dfo)==U_BUFFER_OVERFLOW_ERROR)
 	{
 		INTL_DATA_ERROR_CODE(dfo)=U_ZERO_ERROR;
-		formatted=(UChar*)emalloc(sizeof(UChar) * resultlengthneeded); 
+		formatted=(UChar*)emalloc(sizeof(UChar) * resultlengthneeded);
 		udat_format( DATE_FORMAT_OBJECT(dfo), timestamp, formatted, resultlengthneeded, NULL, &INTL_DATA_ERROR_CODE(dfo));
 	}
 
@@ -56,8 +57,8 @@ static void internal_format(IntlDateFormatter_object *dfo, UDate timestamp, zval
 /* }}} */
 
 
-/* {{{ 
- * Internal function which fetches an element from the passed array for the key_name passed 
+/* {{{
+ * Internal function which fetches an element from the passed array for the key_name passed
 */
 static int32_t internal_get_arr_ele(IntlDateFormatter_object *dfo,
 		HashTable* hash_arr, char* key_name, intl_error *err)
@@ -79,7 +80,7 @@ static int32_t internal_get_arr_ele(IntlDateFormatter_object *dfo,
 		} else {
 			if (Z_LVAL_P(ele_value) > INT32_MAX ||
 					Z_LVAL_P(ele_value) < INT32_MIN) {
-				spprintf(&message, 0, "datefmt_format: value %pd is out of "
+				spprintf(&message, 0, "datefmt_format: value " ZEND_LONG_FMT " is out of "
 						"bounds for a 32-bit integer in key '%s'",
 						Z_LVAL_P(ele_value), key_name);
 				intl_errors_set(err, U_ILLEGAL_ARGUMENT_ERROR, message, 1);
@@ -94,7 +95,7 @@ static int32_t internal_get_arr_ele(IntlDateFormatter_object *dfo,
 }
 /* }}} */
 
-/* {{{ 
+/* {{{
  * Internal function which sets UCalendar  from the passed array and retrieves timestamp
 */
 static UDate internal_get_timestamp(IntlDateFormatter_object *dfo,
@@ -149,7 +150,7 @@ static UDate internal_get_timestamp(IntlDateFormatter_object *dfo,
  * Format the time value as a string. }}}*/
 /* {{{ proto string datefmt_format( [mixed]int $args or array $args )
  * Format the time value as a string. }}}*/
-PHP_FUNCTION(datefmt_format) 
+PHP_FUNCTION(datefmt_format)
 {
 	UDate 		timestamp	= 0;
 	HashTable	*hash_arr	= NULL;
@@ -182,7 +183,7 @@ PHP_FUNCTION(datefmt_format)
 			RETURN_FALSE;
 		}
 	}
-	
+
 	internal_format( dfo, timestamp, return_value);
 }
 

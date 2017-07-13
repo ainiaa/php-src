@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -38,7 +38,9 @@
 #ifdef PHP_WIN32
 #include "win32/time.h"
 #include "win32/signal.h"
+#include "win32/console.h"
 #include <process.h>
+#include <shellapi.h>
 #endif
 #if HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -77,7 +79,6 @@
 #include "zend_compile.h"
 #include "zend_execute.h"
 #include "zend_highlight.h"
-#include "zend_indent.h"
 #include "zend_exceptions.h"
 
 #include "php_getopt.h"
@@ -95,12 +96,19 @@
 # include "win32/select.h"
 #endif
 
+#if defined(PHP_WIN32) && defined(HAVE_OPENSSL)
+# include "openssl/applink.c"
+#endif
+
 PHPAPI extern char *php_ini_opened_path;
 PHPAPI extern char *php_ini_scanned_path;
 PHPAPI extern char *php_ini_scanned_files;
 
-#if defined(PHP_WIN32) && defined(ZTS)
-ZEND_TSRMLS_CACHE_DEFINE;
+#if defined(PHP_WIN32)
+#if defined(ZTS)
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
+static DWORD orig_cp = 0;
 #endif
 
 #ifndef O_BINARY
@@ -109,7 +117,6 @@ ZEND_TSRMLS_CACHE_DEFINE;
 
 #define PHP_MODE_STANDARD      1
 #define PHP_MODE_HIGHLIGHT     2
-#define PHP_MODE_INDENT        3
 #define PHP_MODE_LINT          4
 #define PHP_MODE_STRIP         5
 #define PHP_MODE_CLI_DIRECT    6
@@ -201,7 +208,7 @@ static void print_modules(void) /* {{{ */
 
 	zend_hash_init(&sorted_registry, 50, NULL, NULL, 0);
 	zend_hash_copy(&sorted_registry, &module_registry, NULL);
-	zend_hash_sort(&sorted_registry, zend_qsort, module_name_cmp, 0);
+	zend_hash_sort(&sorted_registry, module_name_cmp, 0);
 	zend_hash_apply(&sorted_registry, print_module_info);
 	zend_hash_destroy(&sorted_registry);
 }
@@ -216,8 +223,9 @@ static int print_extension_info(zend_extension *ext, void *arg) /* {{{ */
 
 static int extension_name_cmp(const zend_llist_element **f, const zend_llist_element **s) /* {{{ */
 {
-	return strcmp(((zend_extension *)(*f)->data)->name,
-				  ((zend_extension *)(*s)->data)->name);
+	zend_extension *fe = (zend_extension*)(*f)->data;
+	zend_extension *se = (zend_extension*)(*s)->data;
+	return strcmp(fe->name, se->name);
 }
 /* }}} */
 
@@ -236,8 +244,11 @@ static void print_extensions(void) /* {{{ */
 #ifndef STDOUT_FILENO
 #define STDOUT_FILENO 1
 #endif
+#ifndef STDERR_FILENO
+#define STDERR_FILENO 2
+#endif
 
-static inline int sapi_cli_select(int fd)
+static inline int sapi_cli_select(php_socket_t fd)
 {
 	fd_set wfd, dfd;
 	struct timeval tv;
@@ -265,11 +276,7 @@ PHP_CLI_API size_t sapi_cli_single_write(const char *str, size_t str_length) /* 
 #endif
 
 	if (cli_shell_callbacks.cli_shell_write) {
-		size_t shell_wrote;
-		shell_wrote = cli_shell_callbacks.cli_shell_write(str, str_length);
-		if (shell_wrote > -1) {
-			return shell_wrote;
-		}
+		cli_shell_callbacks.cli_shell_write(str, str_length);
 	}
 
 #ifdef PHP_WRITE_STDOUT
@@ -302,7 +309,7 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 	if (cli_shell_callbacks.cli_shell_ub_write) {
 		size_t ub_wrote;
 		ub_wrote = cli_shell_callbacks.cli_shell_ub_write(str, str_length);
-		if (ub_wrote > -1) {
+		if (ub_wrote != (size_t) -1) {
 			return ub_wrote;
 		}
 	}
@@ -374,9 +381,12 @@ static void sapi_cli_register_variables(zval *track_vars_array) /* {{{ */
 }
 /* }}} */
 
-static void sapi_cli_log_message(char *message) /* {{{ */
+static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
 {
 	fprintf(stderr, "%s\n", message);
+#ifdef PHP_WIN32
+	fflush(stderr);
+#endif
 }
 /* }}} */
 
@@ -470,7 +480,7 @@ static sapi_module_struct cli_sapi_module = {
 	sapi_cli_log_message,			/* Log message */
 	NULL,							/* Get request time */
 	NULL,							/* Child terminate */
-	
+
 	STANDARD_SAPI_MODULE_PROPERTIES
 };
 /* }}} */
@@ -485,7 +495,7 @@ static const zend_function_entry additional_functions[] = {
 	ZEND_FE(dl, arginfo_dl)
 	PHP_FE(cli_set_process_title,        arginfo_cli_set_process_title)
 	PHP_FE(cli_get_process_title,        arginfo_cli_get_process_title)
-	{NULL, NULL, NULL}
+	PHP_FE_END
 };
 
 /* {{{ php_cli_usage
@@ -500,12 +510,12 @@ static void php_cli_usage(char *argv0)
 	} else {
 		prog = "php";
 	}
-	
+
 	printf( "Usage: %s [options] [-f] <file> [--] [args...]\n"
 				"   %s [options] -r <code> [--] [args...]\n"
 				"   %s [options] [-B <begin_code>] -R <code> [-E <end_code>] [--] [args...]\n"
 				"   %s [options] [-B <begin_code>] -F <file> [-E <end_code>] [--] [args...]\n"
-				"   %s [options] -S <addr>:<port> [-t docroot]\n"
+				"   %s [options] -S <addr>:<port> [-t docroot] [router]\n"
 				"   %s [options] -- [args...]\n"
 				"   %s [options] -a\n"
 				"\n"
@@ -515,7 +525,7 @@ static void php_cli_usage(char *argv0)
 				"  -a               Run interactively\n"
 #endif
 				"  -c <path>|<file> Look for php.ini file in this directory\n"
-				"  -n               No php.ini file will be used\n"
+				"  -n               No configuration (ini) files will be used\n"
 				"  -d foo[=bar]     Define INI entry foo with value 'bar'\n"
 				"  -e               Generate extended information for debugger/profiler\n"
 				"  -f <file>        Parse and execute <file>.\n"
@@ -555,11 +565,10 @@ static php_stream *s_in_process = NULL;
 
 static void cli_register_file_handles(void) /* {{{ */
 {
-	zval zin, zout, zerr;
 	php_stream *s_in, *s_out, *s_err;
 	php_stream_context *sc_in=NULL, *sc_out=NULL, *sc_err=NULL;
 	zend_constant ic, oc, ec;
-	
+
 	s_in  = php_stream_open_wrapper_ex("php://stdin",  "rb", 0, NULL, sc_in);
 	s_out = php_stream_open_wrapper_ex("php://stdout", "wb", 0, NULL, sc_out);
 	s_err = php_stream_open_wrapper_ex("php://stderr", "wb", 0, NULL, sc_err);
@@ -570,7 +579,7 @@ static void cli_register_file_handles(void) /* {{{ */
 		if (s_err) php_stream_close(s_err);
 		return;
 	}
-	
+
 #if PHP_DEBUG
 	/* do not close stdout and stderr */
 	s_out->flags |= PHP_STREAM_FLAG_NO_CLOSE;
@@ -579,23 +588,20 @@ static void cli_register_file_handles(void) /* {{{ */
 
 	s_in_process = s_in;
 
-	php_stream_to_zval(s_in,  &zin);
-	php_stream_to_zval(s_out, &zout);
-	php_stream_to_zval(s_err, &zerr);
-	
-	ZVAL_COPY_VALUE(&ic.value, &zin);
+	php_stream_to_zval(s_in,  &ic.value);
+	php_stream_to_zval(s_out, &oc.value);
+	php_stream_to_zval(s_err, &ec.value);
+
 	ic.flags = CONST_CS;
 	ic.name = zend_string_init("STDIN", sizeof("STDIN")-1, 1);
 	ic.module_number = 0;
 	zend_register_constant(&ic);
 
-	ZVAL_COPY_VALUE(&oc.value, &zout);
 	oc.flags = CONST_CS;
 	oc.name = zend_string_init("STDOUT", sizeof("STDOUT")-1, 1);
 	oc.module_number = 0;
 	zend_register_constant(&oc);
 
-	ZVAL_COPY_VALUE(&ec.value, &zerr);
 	ec.flags = CONST_CS;
 	ec.name = zend_string_init("STDERR", sizeof("STDERR")-1, 1);
 	ec.module_number = 0;
@@ -644,6 +650,17 @@ static int cli_seek_file_begin(zend_file_handle *file_handle, char *script_file,
 }
 /* }}} */
 
+/*{{{ php_cli_win32_ctrl_handler */
+#if defined(PHP_WIN32) && !defined(PHP_CLI_WIN32_NO_CONSOLE)
+BOOL WINAPI php_cli_win32_ctrl_handler(DWORD sig)
+{
+	(void)php_win32_cp_cli_do_restore(orig_cp);
+
+	return FALSE;
+}
+#endif
+/*}}}*/
+
 static int do_cli(int argc, char **argv) /* {{{ */
 {
 	int c;
@@ -657,14 +674,17 @@ static int do_cli(int argc, char **argv) /* {{{ */
 	char *exec_direct=NULL, *exec_run=NULL, *exec_begin=NULL, *exec_end=NULL;
 	char *arg_free=NULL, **arg_excp=&arg_free;
 	char *script_file=NULL, *translated_path = NULL;
+#if defined(PHP_WIN32) && !defined(PHP_CLI_WIN32_NO_CONSOLE) && (HAVE_LIBREADLINE || HAVE_LIBEDIT) && !defined(COMPILE_DL_READLINE)
+	int interactive = php_win32_console_is_own();
+#else
 	int interactive=0;
+#endif
 	int lineno = 0;
 	const char *param_error=NULL;
 	int hide_argv = 0;
-	zend_string *key;
 
 	zend_try {
-	
+
 		CG(in_compilation) = 0; /* not initialized but needed for several options */
 
 		while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2)) != -1) {
@@ -681,17 +701,28 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				goto out;
 
 			case 'v': /* show php version & quit */
-				php_printf("PHP %s (%s) (built: %s %s) %s\nCopyright (c) 1997-2014 The PHP Group\n%s",
+				php_printf("PHP %s (%s) (built: %s %s) ( %s)\nCopyright (c) 1997-2017 The PHP Group\n%s",
 					PHP_VERSION, cli_sapi_module.name, __DATE__, __TIME__,
-#if ZEND_DEBUG && defined(HAVE_GCOV)
-					"(DEBUG GCOV)",
-#elif ZEND_DEBUG
-					"(DEBUG)",
-#elif defined(HAVE_GCOV)
-					"(GCOV)",
+#if ZTS
+					"ZTS "
 #else
-					"",
+					"NTS "
 #endif
+#ifdef COMPILER
+					COMPILER
+					" "
+#endif
+#ifdef ARCHITECTURE
+					ARCHITECTURE
+					" "
+#endif
+#if ZEND_DEBUG
+					"DEBUG "
+#endif
+#ifdef HAVE_GCOV
+					"GCOV "
+#endif
+					,
 					get_zend_version()
 				);
 				sapi_deactivate();
@@ -771,16 +802,6 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				behavior=PHP_MODE_LINT;
 				break;
 
-#if 0 /* not yet operational, see also below ... */
-			case '': /* generate indented source mode*/
-				if (behavior == PHP_MODE_CLI_DIRECT || behavior == PHP_MODE_PROCESS_STDIN) {
-					param_error = "Source indenting only works for files.\n";
-					break;
-				}
-				behavior=PHP_MODE_INDENT;
-				break;
-#endif
-
 			case 'q': /* do not generate HTTP headers */
 				/* This is default so NOP */
 				break;
@@ -798,7 +819,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				behavior=PHP_MODE_CLI_DIRECT;
 				exec_direct=php_optarg;
 				break;
-			
+
 			case 'R':
 				if (behavior == PHP_MODE_PROCESS_STDIN) {
 					if (exec_run || script_file) {
@@ -907,11 +928,11 @@ static int do_cli(int argc, char **argv) /* {{{ */
 		}
 
 		/* only set script_file if not set already and not in direct mode and not at end of parameter list */
-		if (argc > php_optind 
-		  && !script_file 
-		  && behavior!=PHP_MODE_CLI_DIRECT 
-		  && behavior!=PHP_MODE_PROCESS_STDIN 
-		  && strcmp(argv[php_optind-1],"--")) 
+		if (argc > php_optind
+		  && !script_file
+		  && behavior!=PHP_MODE_CLI_DIRECT
+		  && behavior!=PHP_MODE_PROCESS_STDIN
+		  && strcmp(argv[php_optind-1],"--"))
 		{
 			script_file=argv[php_optind];
 			php_optind++;
@@ -931,7 +952,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 			/* here but this would make things only more complicated. And it */
 			/* is consitent with the way -R works where the stdin file handle*/
 			/* is also accessible. */
-			file_handle.filename = "-";
+			file_handle.filename = "Standard input code";
 			file_handle.handle.fp = stdin;
 		}
 		file_handle.type = ZEND_HANDLE_FP;
@@ -965,14 +986,12 @@ static int do_cli(int argc, char **argv) /* {{{ */
 			}
 		}
 
-		key = zend_string_init("_SERVER", sizeof("_SERVER")-1, 0);
-		zend_is_auto_global(key);
-		zend_string_release(key);
+		zend_is_auto_global_str(ZEND_STRL("_SERVER"));
 
 		PG(during_request_startup) = 0;
 		switch (behavior) {
 		case PHP_MODE_STANDARD:
-			if (strcmp(file_handle.filename, "-")) {
+			if (strcmp(file_handle.filename, "Standard input code")) {
 				cli_register_file_handles();
 			}
 
@@ -1008,22 +1027,13 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				goto out;
 			}
 			break;
-#if 0
-			/* Zeev might want to do something with this one day */
-		case PHP_MODE_INDENT:
-			open_file_for_scanning(&file_handle);
-			zend_indent();
-			zend_file_handle_dtor(file_handle.handle);
-			goto out;
-			break;
-#endif
 		case PHP_MODE_CLI_DIRECT:
 			cli_register_file_handles();
 			if (zend_eval_string_ex(exec_direct, NULL, "Command line code", 1) == FAILURE) {
 				exit_status=254;
 			}
 			break;
-			
+
 		case PHP_MODE_PROCESS_STDIN:
 			{
 				char *input;
@@ -1035,16 +1045,15 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				if (exec_begin && zend_eval_string_ex(exec_begin, NULL, "Command line begin code", 1) == FAILURE) {
 					exit_status=254;
 				}
-				ZVAL_LONG(&argi, index);
-				zend_hash_str_update(&EG(symbol_table).ht, "argi", sizeof("argi")-1, &argi);
 				while (exit_status == SUCCESS && (input=php_stream_gets(s_in_process, NULL, 0)) != NULL) {
 					len = strlen(input);
 					while (len > 0 && len-- && (input[len]=='\n' || input[len]=='\r')) {
 						input[len] = '\0';
 					}
-					ZVAL_STRINGL(&argn, input, len);
-					zend_hash_str_update(&EG(symbol_table).ht, "argn", sizeof("argn")-1, &argn);
-					Z_LVAL(argi) = ++index;
+					ZVAL_STRINGL(&argn, input, len + 1);
+					zend_hash_str_update(&EG(symbol_table), "argn", sizeof("argn")-1, &argn);
+					ZVAL_LONG(&argi, ++index);
+					zend_hash_str_update(&EG(symbol_table), "argi", sizeof("argi")-1, &argi);
 					if (exec_run) {
 						if (zend_eval_string_ex(exec_run, NULL, "Command line run code", 1) == FAILURE) {
 							exit_status=254;
@@ -1098,7 +1107,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 							pce = reflection_zend_extension_ptr;
 							break;
 					}
-					
+
 					ZVAL_STRING(&arg, reflection_what);
 					object_init_ex(&ref, pce);
 
@@ -1107,10 +1116,10 @@ static int do_cli(int argc, char **argv) /* {{{ */
 					zend_call_method_with_1_params(&ref, pce, &pce->constructor, "__construct", NULL, &arg);
 
 					if (EG(exception)) {
-						zval tmp, *msg;
+						zval tmp, *msg, rv;
 
 						ZVAL_OBJ(&tmp, EG(exception));
-						msg = zend_read_property(zend_exception_get_default(), &tmp, "message", sizeof("message")-1, 0);
+						msg = zend_read_property(zend_ce_exception, &tmp, "message", sizeof("message")-1, 0, &rv);
 						zend_printf("Exception: %s\n", Z_STRVAL_P(msg));
 						zval_ptr_dtor(&tmp);
 						EG(exception) = NULL;
@@ -1124,7 +1133,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				}
 			case PHP_MODE_REFLECTION_EXT_INFO:
 				{
-					int len = (int)strlen(reflection_what);
+					size_t len = strlen(reflection_what);
 					char *lcname = zend_str_tolower_dup(reflection_what, len);
 					zend_module_entry *module;
 
@@ -1138,7 +1147,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
 					} else {
 						php_info_print_module(module);
 					}
-					
+
 					efree(lcname);
 					break;
 				}
@@ -1181,12 +1190,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 int main(int argc, char *argv[])
 #endif
 {
-#ifdef ZTS
-	void ***tsrm_ls;
-#endif
-#ifdef PHP_CLI_WIN32_NO_CONSOLE
+#if defined(PHP_WIN32)
+# ifdef PHP_CLI_WIN32_NO_CONSOLE
 	int argc = __argc;
 	char **argv = __argv;
+# else
+	int num_args;
+	wchar_t **argv_wide;
+	char **argv_save = argv;
+	BOOL using_wide_argv = 0;
+# endif
 #endif
 
 	int c;
@@ -1196,7 +1209,7 @@ int main(int argc, char *argv[])
 	int php_optind = 1, use_extended_info = 0;
 	char *ini_path_override = NULL;
 	char *ini_entries = NULL;
-	int ini_entries_len = 0;
+	size_t ini_entries_len = 0;
 	int ini_ignore = 0;
 	sapi_module_struct *sapi_module = &cli_sapi_module;
 
@@ -1205,6 +1218,11 @@ int main(int argc, char *argv[])
 	 * in any way.
 	 */
 	argv = save_ps_args(argc, argv);
+
+#if defined(PHP_WIN32) && !defined(PHP_CLI_WIN32_NO_CONSOLE)
+	php_win32_console_fileno_set_vt100(STDOUT_FILENO, TRUE);
+	php_win32_console_fileno_set_vt100(STDERR_FILENO, TRUE);
+#endif
 
 	cli_sapi_module.additional_functions = additional_functions;
 
@@ -1239,9 +1257,11 @@ int main(int argc, char *argv[])
 
 #ifdef ZTS
 	tsrm_startup(1, 1, 0, NULL);
-	tsrm_ls = ts_resource(0);
-	ZEND_TSRMLS_CACHE_UPDATE;
+	(void)ts_resource(0);
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
+
+	zend_signal_startup();
 
 #ifdef PHP_WIN32
 	_fmode = _O_BINARY;			/*sets default for file streams to binary */
@@ -1263,7 +1283,7 @@ int main(int argc, char *argv[])
 				break;
 			case 'd': {
 				/* define ini entries on command line */
-				int len = (int)strlen(php_optarg);
+				size_t len = strlen(php_optarg);
 				char *val;
 
 				if ((val = strchr(php_optarg, '='))) {
@@ -1271,11 +1291,11 @@ int main(int argc, char *argv[])
 					if (!isalnum(*val) && *val != '"' && *val != '\'' && *val != '\0') {
 						ini_entries = realloc(ini_entries, ini_entries_len + len + sizeof("\"\"\n\0"));
 						memcpy(ini_entries + ini_entries_len, php_optarg, (val - php_optarg));
-						ini_entries_len += (int)(val - php_optarg);
+						ini_entries_len += (val - php_optarg);
 						memcpy(ini_entries + ini_entries_len, "\"", 1);
 						ini_entries_len++;
 						memcpy(ini_entries + ini_entries_len, val, len - (val - php_optarg));
-						ini_entries_len += len - (int)(val - php_optarg);
+						ini_entries_len += len - (val - php_optarg);
 						memcpy(ini_entries + ini_entries_len, "\"\n\0", sizeof("\"\n\0"));
 						ini_entries_len += sizeof("\n\0\"") - 2;
 					} else {
@@ -1348,7 +1368,20 @@ exit_loop:
 		goto out;
 	}
 	module_started = 1;
-	
+
+#if defined(PHP_WIN32) && !defined(PHP_CLI_WIN32_NO_CONSOLE)
+	php_win32_cp_cli_setup();
+	orig_cp = (php_win32_cp_get_orig())->id;
+	/* Ignore the delivered argv and argc, read from W API. This place
+		might be too late though, but this is the earliest place ATW
+		we can access the internal charset information from PHP. */
+	argv_wide = CommandLineToArgvW(GetCommandLineW(), &num_args);
+	PHP_WIN32_CP_W_TO_ANY_ARRAY(argv_wide, num_args, argv, argc)
+	using_wide_argv = 1;
+
+	SetConsoleCtrlHandler(php_cli_win32_ctrl_handler, TRUE);
+#endif
+
 	/* -e option */
 	if (use_extended_info) {
 		CG(compiler_options) |= ZEND_COMPILE_EXTENDED_INFO;
@@ -1382,6 +1415,15 @@ out:
 	tsrm_shutdown();
 #endif
 
+#if defined(PHP_WIN32) && !defined(PHP_CLI_WIN32_NO_CONSOLE)
+	(void)php_win32_cp_cli_restore();
+
+	if (using_wide_argv) {
+		PHP_WIN32_CP_FREE_ARRAY(argv, argc);
+		LocalFree(argv_wide);
+	}
+	argv = argv_save;
+#endif
 	/*
 	 * Do not move this de-initialization. It needs to happen right before
 	 * exiting.

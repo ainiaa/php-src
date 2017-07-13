@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -50,10 +50,10 @@ ZEND_END_ARG_INFO();
 /* }}} */
 
 /*
-* class DOMImplementation 
+* class DOMImplementation
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-102161490
-* Since: 
+* Since:
 */
 
 const zend_function_entry php_dom_domimplementation_class_functions[] = {
@@ -66,7 +66,7 @@ const zend_function_entry php_dom_domimplementation_class_functions[] = {
 
 /* {{{ proto boolean dom_domimplementation_has_feature(string feature, string version);
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-5CED94D7
-Since: 
+Since:
 */
 PHP_METHOD(domimplementation, hasFeature)
 {
@@ -127,7 +127,7 @@ PHP_METHOD(domimplementation, createDocumentType)
 		localname = xmlStrdup((xmlChar *) name);
 	}
 
-	/* TODO: Test that localname has no invalid chars 
+	/* TODO: Test that localname has no invalid chars
 	php_dom_throw_error(INVALID_CHARACTER_ERR,);
 	*/
 

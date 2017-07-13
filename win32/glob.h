@@ -64,7 +64,7 @@ typedef struct {
 	 * and lstat(2).
 	 */
 	void (*gl_closedir)(void *);
-	struct dirent *(*gl_readdir)(void *);	
+	struct dirent *(*gl_readdir)(void *);
 	void *(*gl_opendir)(const char *);
 	int (*gl_lstat)(const char *, zend_stat_t *);
 	int (*gl_stat)(const char *, zend_stat_t *);
@@ -101,3 +101,12 @@ PHPAPI int	glob(const char *, int, int (*)(const char *, int), glob_t *);
 PHPAPI void	globfree(glob_t *);
 END_EXTERN_C()
 #endif /* !_GLOB_H_ */
+
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

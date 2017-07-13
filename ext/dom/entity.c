@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -29,20 +29,20 @@
 
 
 /*
-* class DOMEntity extends DOMNode 
+* class DOMEntity extends DOMNode
 *
 * URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-527DCFF2
-* Since: 
+* Since:
 */
 
 const zend_function_entry php_dom_entity_class_functions[] = {
 	PHP_FE_END
 };
 
-/* {{{ publicId	string	
-readonly=yes 
+/* {{{ publicId	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-D7303025
-Since: 
+Since:
 */
 int dom_entity_public_id_read(dom_object *obj, zval *retval)
 {
@@ -64,10 +64,10 @@ int dom_entity_public_id_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ systemId	string	
-readonly=yes 
+/* {{{ systemId	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-D7C29F3E
-Since: 
+Since:
 */
 int dom_entity_system_id_read(dom_object *obj, zval *retval)
 {
@@ -89,10 +89,10 @@ int dom_entity_system_id_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ notationName	string	
-readonly=yes 
+/* {{{ notationName	string
+readonly=yes
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#ID-6ABAEB38
-Since: 
+Since:
 */
 int dom_entity_notation_name_read(dom_object *obj, zval *retval)
 {
@@ -117,8 +117,8 @@ int dom_entity_notation_name_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ actualEncoding	string	
-readonly=no 
+/* {{{ actualEncoding	string
+readonly=no
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#Entity3-actualEncoding
 Since: DOM Level 3
 */
@@ -135,8 +135,8 @@ int dom_entity_actual_encoding_write(dom_object *obj, zval *newval)
 
 /* }}} */
 
-/* {{{ encoding	string	
-readonly=no 
+/* {{{ encoding	string
+readonly=no
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#Entity3-encoding
 Since: DOM Level 3
 */
@@ -153,8 +153,8 @@ int dom_entity_encoding_write(dom_object *obj, zval *newval)
 
 /* }}} */
 
-/* {{{ version	string	
-readonly=no 
+/* {{{ version	string
+readonly=no
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#Entity3-version
 Since: DOM Level 3
 */

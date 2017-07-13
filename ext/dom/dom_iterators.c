@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -182,6 +182,7 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 	int previndex=0;
 	HashTable *nodeht;
 	zval *entry;
+	zend_bool do_curobj_undef = 1;
 
 	php_dom_iterator *iterator = (php_dom_iterator *)iter;
 
@@ -190,27 +191,28 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 	objmap = (dom_nnodemap_object *)nnmap->ptr;
 
 	intern = Z_DOMOBJ_P(&iterator->curobj);
-	zval_ptr_dtor(&iterator->curobj);
-	ZVAL_UNDEF(&iterator->curobj);
 
 	if (intern != NULL && intern->ptr != NULL) {
-		if (objmap->nodetype != XML_ENTITY_NODE && 
+		if (objmap->nodetype != XML_ENTITY_NODE &&
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);
 				zend_hash_move_forward(nodeht);
 				if ((entry = zend_hash_get_current_data(nodeht))) {
+					zval_ptr_dtor(&iterator->curobj);
+					ZVAL_UNDEF(&iterator->curobj);
 					ZVAL_COPY(&iterator->curobj, entry);
+					do_curobj_undef = 0;
 				}
 			} else {
 				curnode = (xmlNodePtr)((php_libxml_node_ptr *)intern->ptr)->node;
-				if (objmap->nodetype == XML_ATTRIBUTE_NODE || 
+				if (objmap->nodetype == XML_ATTRIBUTE_NODE ||
 					objmap->nodetype == XML_ELEMENT_NODE) {
 					curnode = curnode->next;
 				} else {
 					/* Nav the tree evey time as this is LIVE */
 					basenode = dom_object_get_node(objmap->baseobj);
-					if (basenode && (basenode->type == XML_DOCUMENT_NODE || 
+					if (basenode && (basenode->type == XML_DOCUMENT_NODE ||
 						basenode->type == XML_HTML_DOCUMENT_NODE)) {
 						basenode = xmlDocGetRootElement((xmlDoc *) basenode);
 					} else if (basenode) {
@@ -231,6 +233,10 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 		}
 	}
 err:
+	if (do_curobj_undef) {
+		zval_ptr_dtor(&iterator->curobj);
+		ZVAL_UNDEF(&iterator->curobj);
+	}
 	if (curnode) {
 		php_dom_create_object(curnode, &iterator->curobj, objmap->baseobj);
 	}
@@ -243,6 +249,7 @@ zend_object_iterator_funcs php_dom_iterator_funcs = {
 	php_dom_iterator_current_data,
 	php_dom_iterator_current_key,
 	php_dom_iterator_move_forward,
+	NULL,
 	NULL
 };
 
@@ -270,7 +277,7 @@ zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, i
 	intern = Z_DOMOBJ_P(object);
 	objmap = (dom_nnodemap_object *)intern->ptr;
 	if (objmap != NULL) {
-		if (objmap->nodetype != XML_ENTITY_NODE && 
+		if (objmap->nodetype != XML_ENTITY_NODE &&
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);

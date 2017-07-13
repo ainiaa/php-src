@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -40,22 +40,20 @@ static inline dom_object *php_dom_obj_from_obj(zend_object *obj) {
 #define Z_DOMOBJ_P(zv)  php_dom_obj_from_obj(Z_OBJ_P((zv)))
 
 #ifdef PHP_WIN32
-#	ifdef PHPAPI
-#		undef PHPAPI
-#	endif
 #	ifdef DOM_EXPORTS
-#		define PHPAPI __declspec(dllexport)
-#	else
-#		define PHPAPI __declspec(dllimport)
+#		define PHP_DOM_EXPORT __declspec(dllexport)
+#	elif !defined(DOM_LOCAL_DEFINES) /* Allow to counteract LNK4049 warning. */
+#		define PHP_DOM_EXPORT __declspec(dllimport)
+#   else
+#		define PHP_DOM_EXPORT
 #	endif /* DOM_EXPORTS */
 #elif defined(__GNUC__) && __GNUC__ >= 4
-#	ifdef PHPAPI
-#		undef PHPAPI
-#	endif
-#	define PHPAPI __attribute__ ((visibility("default")))
-#endif /* PHP_WIN32 */
-
-#define PHP_DOM_EXPORT PHPAPI
+#	define PHP_DOM_EXPORT __attribute__ ((visibility("default")))
+#elif defined(PHPAPI)
+#   define PHP_DOM_EXPORT PHPAPI
+#else
+#   define PHP_DOM_EXPORT
+#endif
 
 PHP_DOM_EXPORT extern zend_class_entry *dom_node_class_entry;
 PHP_DOM_EXPORT dom_object *php_dom_object_get_data(xmlNodePtr obj);
@@ -69,7 +67,7 @@ PHP_DOM_EXPORT xmlNodePtr dom_object_get_node(dom_object *obj);
 	__intern = Z_LIBXML_NODE_P(__id); \
 	if (__intern->node == NULL || !(__ptr = (__prtype)__intern->node->node)) { \
   		php_error_docref(NULL, E_WARNING, "Couldn't fetch %s", \
-			__intern->std.ce->name->val);\
+			ZSTR_VAL(__intern->std.ce->name));\
   		RETURN_NULL();\
   	} \
 }

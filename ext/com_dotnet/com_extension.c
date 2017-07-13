@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -244,7 +244,7 @@ zend_module_entry com_dotnet_module_entry = {
 	PHP_RINIT(com_dotnet),
 	PHP_RSHUTDOWN(com_dotnet),
 	PHP_MINFO(com_dotnet),
-	"0.1",
+	PHP_COM_DOTNET_VERSION,
 	PHP_MODULE_GLOBALS(com_dotnet),
 	PHP_GINIT(com_dotnet),
 	NULL,
@@ -255,7 +255,7 @@ zend_module_entry com_dotnet_module_entry = {
 
 #ifdef COMPILE_DL_COM_DOTNET
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE()
 #endif
 ZEND_GET_MODULE(com_dotnet)
 #endif
@@ -341,7 +341,7 @@ PHP_INI_END()
 static PHP_GINIT_FUNCTION(com_dotnet)
 {
 #if defined(COMPILE_DL_COM_DOTNET) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	memset(com_dotnet_globals, 0, sizeof(*com_dotnet_globals));
 	com_dotnet_globals->code_page = CP_ACP;
@@ -358,7 +358,7 @@ PHP_MINIT_FUNCTION(com_dotnet)
 	php_com_persist_minit(INIT_FUNC_ARGS_PASSTHRU);
 
 	INIT_CLASS_ENTRY(ce, "com_exception", NULL);
-	php_com_exception_class_entry = zend_register_internal_class_ex(&ce, zend_exception_get_default());
+	php_com_exception_class_entry = zend_register_internal_class_ex(&ce, zend_ce_exception);
 	php_com_exception_class_entry->ce_flags |= ZEND_ACC_FINAL;
 /*	php_com_exception_class_entry->constructor->common.fn_flags |= ZEND_ACC_PROTECTED; */
 
@@ -367,7 +367,7 @@ PHP_MINIT_FUNCTION(com_dotnet)
 	php_com_saproxy_class_entry->ce_flags |= ZEND_ACC_FINAL;
 /*	php_com_saproxy_class_entry->constructor->common.fn_flags |= ZEND_ACC_PROTECTED; */
 	php_com_saproxy_class_entry->get_iterator = php_com_saproxy_iter_get;
-	
+
 	INIT_CLASS_ENTRY(ce, "variant", NULL);
 	ce.create_object = php_com_object_new;
 	php_com_variant_class_entry = zend_register_internal_class(&ce);
@@ -396,7 +396,7 @@ PHP_MINIT_FUNCTION(com_dotnet)
 	ULongToIntPtr(x, &__tmp); \
 	REGISTER_LONG_CONSTANT(#x, __tmp, CONST_CS|CONST_PERSISTENT); \
 }
-	
+
 	COM_CONST(CLSCTX_INPROC_SERVER);
 	COM_CONST(CLSCTX_INPROC_HANDLER);
 	COM_CONST(CLSCTX_LOCAL_SERVER);

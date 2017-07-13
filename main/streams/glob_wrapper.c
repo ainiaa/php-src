@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -72,7 +72,7 @@ PHPAPI char* _php_glob_stream_get_path(php_stream *stream, int copy, size_t *ple
 PHPAPI char* _php_glob_stream_get_pattern(php_stream *stream, int copy, size_t *plen STREAMS_DC) /* {{{ */
 {
 	glob_s_t *pglob = (glob_s_t *)stream->abstract;
-	
+
 	if (pglob && pglob->pattern) {
 		if (plen) {
 			*plen = pglob->pattern_len;
@@ -116,7 +116,7 @@ static void php_glob_stream_path_split(glob_s_t *pglob, const char *path, int ge
 	if ((pos = strrchr(path, '/')) != NULL) {
 		path = pos+1;
 	}
-#if defined(PHP_WIN32) || defined(NETWARE)
+#ifdef PHP_WIN32
 	if ((pos = strrchr(path, '\\')) != NULL) {
 		path = pos+1;
 	}
@@ -207,25 +207,25 @@ php_stream_ops  php_glob_stream_ops = {
 
  /* {{{ php_glob_stream_opener */
 static php_stream *php_glob_stream_opener(php_stream_wrapper *wrapper, const char *path, const char *mode,
-		int options, char **opened_path, php_stream_context *context STREAMS_DC)
+		int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	glob_s_t *pglob;
 	int ret;
 	const char *tmp, *pos;
 
+	if (!strncmp(path, "glob://", sizeof("glob://")-1)) {
+		path += sizeof("glob://")-1;
+		if (opened_path) {
+			*opened_path = zend_string_init(path, strlen(path), 0);
+		}
+	}
+
 	if (((options & STREAM_DISABLE_OPEN_BASEDIR) == 0) && php_check_open_basedir(path)) {
 		return NULL;
 	}
 
-	if (!strncmp(path, "glob://", sizeof("glob://")-1)) {
-		path += sizeof("glob://")-1;
-		if (opened_path) {
-			*opened_path = estrdup(path);
-		}
-	}
-
 	pglob = ecalloc(sizeof(*pglob), 1);
-	
+
 	if (0 != (ret = glob(path, pglob->flags & GLOB_FLAGMASK, NULL, &pglob->glob))) {
 #ifdef GLOB_NOMATCH
 		if (GLOB_NOMATCH != ret)
@@ -240,7 +240,7 @@ static php_stream *php_glob_stream_opener(php_stream_wrapper *wrapper, const cha
 	if ((tmp = strrchr(pos, '/')) != NULL) {
 		pos = tmp+1;
 	}
-#if defined(PHP_WIN32) || defined(NETWARE)
+#ifdef PHP_WIN32
 	if ((tmp = strrchr(pos, '\\')) != NULL) {
 		pos = tmp+1;
 	}
@@ -268,6 +268,7 @@ static php_stream_wrapper_ops  php_glob_stream_wrapper_ops = {
 	NULL,
 	php_glob_stream_opener,
 	"glob",
+	NULL,
 	NULL,
 	NULL,
 	NULL,

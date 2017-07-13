@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -36,14 +36,14 @@ static size_t php_gziop_read(php_stream *stream, char *buf, size_t count)
 {
 	struct php_gz_stream_data_t *self = (struct php_gz_stream_data_t *) stream->abstract;
 	int read;
-	
+
 	/* XXX this needs to be looped for the case count > UINT_MAX */
 	read = gzread(self->gz_file, buf, count);
-	
+
 	if (gzeof(self->gz_file)) {
 		stream->eof = 1;
 	}
-		
+
 	return (size_t)((read < 0) ? 0 : read);
 }
 
@@ -77,7 +77,7 @@ static int php_gziop_close(php_stream *stream, int close_handle)
 {
 	struct php_gz_stream_data_t *self = (struct php_gz_stream_data_t *) stream->abstract;
 	int ret = EOF;
-	
+
 	if (close_handle) {
 		if (self->gz_file) {
 			ret = gzclose(self->gz_file);
@@ -104,14 +104,14 @@ php_stream_ops php_stream_gzio_ops = {
 	php_gziop_write, php_gziop_read,
 	php_gziop_close, php_gziop_flush,
 	"ZLIB",
-	php_gziop_seek, 
+	php_gziop_seek,
 	NULL, /* cast */
 	NULL, /* stat */
 	NULL  /* set_option */
 };
 
-php_stream *php_stream_gzopen(php_stream_wrapper *wrapper, const char *path, const char *mode, int options, 
-							  char **opened_path, php_stream_context *context STREAMS_DC)
+php_stream *php_stream_gzopen(php_stream_wrapper *wrapper, const char *path, const char *mode, int options,
+							  zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	struct php_gz_stream_data_t *self;
 	php_stream *stream = NULL, *innerstream = NULL;
@@ -123,15 +123,15 @@ php_stream *php_stream_gzopen(php_stream_wrapper *wrapper, const char *path, con
 		}
 		return NULL;
 	}
-	
+
 	if (strncasecmp("compress.zlib://", path, 16) == 0) {
 		path += 16;
 	} else if (strncasecmp("zlib:", path, 5) == 0) {
 		path += 5;
 	}
-	
+
 	innerstream = php_stream_open_wrapper_ex(path, mode, STREAM_MUST_SEEK | options | STREAM_WILL_CAST, opened_path, context);
-	
+
 	if (innerstream) {
 		php_socket_t fd;
 
@@ -172,7 +172,8 @@ static php_stream_wrapper_ops gzip_stream_wops = {
 	NULL, /* unlink */
 	NULL, /* rename */
 	NULL, /* mkdir */
-	NULL  /* rmdir */
+	NULL, /* rmdir */
+	NULL
 };
 
 php_stream_wrapper php_stream_gzip_wrapper =	{

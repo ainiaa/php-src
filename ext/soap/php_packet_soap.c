@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -193,7 +193,7 @@ int parse_packet_soap(zval *this_ptr, char *buffer, int buffer_size, sdlFunction
 
 			tmp = get_node(fault->children, "faultstring");
 			if (tmp != NULL && tmp->children != NULL) {
-				zval zv; 
+				zval zv;
 				master_to_zval(&zv, get_conversion(IS_STRING), tmp);
 				faultstring = Z_STR(zv);
 			}
@@ -234,7 +234,7 @@ int parse_packet_soap(zval *this_ptr, char *buffer, int buffer_size, sdlFunction
 				master_to_zval(&details, NULL, tmp);
 			}
 		}
-		add_soap_fault(this_ptr, faultcode, faultstring ? faultstring->val : NULL, faultactor ? faultactor->val : NULL, &details);
+		add_soap_fault(this_ptr, faultcode, faultstring ? ZSTR_VAL(faultstring) : NULL, faultactor ? ZSTR_VAL(faultactor) : NULL, &details);
 		if (faultstring) {
 			zend_string_release(faultstring);
 		}
@@ -307,7 +307,7 @@ int parse_packet_soap(zval *this_ptr, char *buffer, int buffer_size, sdlFunction
 									val = get_node(cur->children, "result");
 								}
 								if (val == NULL && cur->children && cur->children->next == NULL) {
-									val = cur->children;								  
+									val = cur->children;
 								}
 							}
 						}
@@ -385,7 +385,7 @@ int parse_packet_soap(zval *this_ptr, char *buffer, int buffer_size, sdlFunction
 			} else {
 				zend_refcounted *garbage = Z_COUNTED_P(return_value);
 				ZVAL_COPY(return_value, tmp);
-				_zval_dtor_func(garbage ZEND_FILE_LINE_CC);
+				zval_dtor_func(garbage);
 			}
 		}
 	}

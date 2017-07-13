@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -23,7 +23,7 @@ static int phpdbg_is_auto_global(char *name, int len) {
 	int ret;
 	zend_string *str = zend_string_init(name, len, 0);
 	ret = zend_is_auto_global(str);
-	efree(str);
+	zend_string_free(str);
 	return ret;
 }
 
@@ -43,7 +43,7 @@ PHPDBG_API void phpdbg_webdata_compress(char **msg, int *len) {
 		phpdbg_is_auto_global(ZEND_STRL("_SERVER"));
 		phpdbg_is_auto_global(ZEND_STRL("_REQUEST"));
 		array_init(&zv[1]);
-		zend_hash_copy(Z_ARRVAL(zv[1]), &EG(symbol_table).ht, NULL);
+		zend_hash_copy(Z_ARRVAL(zv[1]), &EG(symbol_table), NULL);
 		Z_ARRVAL(zv[1])->pDestructor = NULL; /* we're operating on a copy! Don't double free zvals */
 		zend_hash_str_del(Z_ARRVAL(zv[1]), ZEND_STRL("GLOBALS")); /* do not use the reference to itself in json */
 		zend_hash_str_add(ht, ZEND_STRL("GLOBALS"), &zv[1]);
@@ -167,8 +167,8 @@ PHPDBG_API void phpdbg_webdata_compress(char **msg, int *len) {
 		PHP_VAR_SERIALIZE_INIT(var_hash);
 		php_var_serialize(&buf, &array, &var_hash);
 		PHP_VAR_SERIALIZE_DESTROY(var_hash);
-		*msg = buf.s->val;
-		*len = buf.s->len;
+		*msg = ZSTR_VAL(buf.s);
+		*len = ZSTR_LEN(buf.s);
 	}
 
 	zval_dtor(&array);

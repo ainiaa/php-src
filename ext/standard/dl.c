@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -40,9 +40,6 @@
 #include "win32/param.h"
 #include "win32/winutil.h"
 #define GET_DL_ERROR()	php_win_err()
-#elif defined(NETWARE)
-#include <sys/param.h>
-#define GET_DL_ERROR()	dlerror()
 #else
 #include <sys/param.h>
 #define GET_DL_ERROR()	DL_ERROR()
@@ -56,9 +53,9 @@ PHPAPI PHP_FUNCTION(dl)
 	char *filename;
 	size_t filename_len;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &filename, &filename_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(filename, filename_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (!PG(enable_dl)) {
 		php_error_docref(NULL, E_WARNING, "Dynamically loaded extensions aren't enabled");
@@ -70,32 +67,14 @@ PHPAPI PHP_FUNCTION(dl)
 		RETURN_FALSE;
 	}
 
-	if ((strncmp(sapi_module.name, "cgi", 3) != 0) &&
-		(strcmp(sapi_module.name, "cli") != 0) &&
-		(strncmp(sapi_module.name, "embed", 5) != 0)
-	) {
-#ifdef ZTS
-		php_error_docref(NULL, E_WARNING, "Not supported in multithreaded Web servers - use extension=%s in your php.ini", filename);
-		RETURN_FALSE;
-#else
-		php_error_docref(NULL, E_DEPRECATED, "dl() is deprecated - use extension=%s in your php.ini", filename);
-#endif
-	}
-
 	php_dl(filename, MODULE_TEMPORARY, return_value, 0);
-	if (Z_LVAL_P(return_value) == 1) {
+	if (Z_TYPE_P(return_value) == IS_TRUE) {
 		EG(full_tables_cleanup) = 1;
 	}
 }
 /* }}} */
 
 #if defined(HAVE_LIBDL)
-
-#ifdef ZTS
-#define USING_ZTS 1
-#else
-#define USING_ZTS 0
-#endif
 
 /* {{{ php_load_extension
  */
@@ -105,7 +84,7 @@ PHPAPI int php_load_extension(char *filename, int type, int start_now)
 	char *libpath;
 	zend_module_entry *module_entry;
 	zend_module_entry *(*get_module)(void);
-	int error_type;
+	int error_type, slash_suffix;
 	char *extension_dir;
 
 	if (type == MODULE_PERSISTENT) {
@@ -130,11 +109,32 @@ PHPAPI int php_load_extension(char *filename, int type, int start_now)
 		libpath = estrdup(filename);
 	} else if (extension_dir && extension_dir[0]) {
 		int extension_dir_len = (int)strlen(extension_dir);
-
-		if (IS_SLASH(extension_dir[extension_dir_len-1])) {
+		slash_suffix = IS_SLASH(extension_dir[extension_dir_len-1]);
+		/* Try as filename first */
+		if (slash_suffix) {
 			spprintf(&libpath, 0, "%s%s", extension_dir, filename); /* SAFE */
 		} else {
 			spprintf(&libpath, 0, "%s%c%s", extension_dir, DEFAULT_SLASH, filename); /* SAFE */
+		}
+
+		if (VCWD_ACCESS(libpath, F_OK)) {
+			/* If file does not exist, consider as extension name and build file name */
+			char *orig_libpath = libpath;
+
+			if (slash_suffix) {
+				spprintf(&libpath, 0, "%s" PHP_SHLIB_EXT_PREFIX "%s." PHP_SHLIB_SUFFIX, extension_dir, filename); /* SAFE */
+			} else {
+				spprintf(&libpath, 0, "%s%c" PHP_SHLIB_EXT_PREFIX "%s." PHP_SHLIB_SUFFIX, extension_dir, DEFAULT_SLASH, filename); /* SAFE */
+			}
+
+			if (VCWD_ACCESS(libpath, F_OK)) {
+				php_error(error_type, "Cannot access dynamic library '%s' (tried : %s, %s)",
+					filename, orig_libpath, libpath);
+				efree(orig_libpath);
+				efree(libpath);
+				return FAILURE;
+			}
+			efree(orig_libpath);
 		}
 	} else {
 		return FAILURE; /* Not full path given or extension_dir is not set */
@@ -143,7 +143,7 @@ PHPAPI int php_load_extension(char *filename, int type, int start_now)
 	/* load dynamic symbol */
 	handle = DL_LOAD(libpath);
 	if (!handle) {
-#if PHP_WIN32
+#ifdef PHP_WIN32
 		char *err = GET_DL_ERROR();
 		if (err && (*err != '\0')) {
 			php_error_docref(NULL, error_type, "Unable to load dynamic library '%s' - %s", libpath, err);
@@ -182,46 +182,12 @@ PHPAPI int php_load_extension(char *filename, int type, int start_now)
 	}
 	module_entry = get_module();
 	if (module_entry->zend_api != ZEND_MODULE_API_NO) {
-		/* Check for pre-4.1.0 module which has a slightly different module_entry structure :( */
-			struct pre_4_1_0_module_entry {
-				char *name;
-				zend_function_entry *functions;
-				int (*module_startup_func)(INIT_FUNC_ARGS);
-				int (*module_shutdown_func)(SHUTDOWN_FUNC_ARGS);
-				int (*request_startup_func)(INIT_FUNC_ARGS);
-				int (*request_shutdown_func)(SHUTDOWN_FUNC_ARGS);
-				void (*info_func)(ZEND_MODULE_INFO_FUNC_ARGS);
-				int (*global_startup_func)(void);
-				int (*global_shutdown_func)(void);
-				int globals_id;
-				int module_started;
-				unsigned char type;
-				void *handle;
-				int module_number;
-				unsigned char zend_debug;
-				unsigned char zts;
-				unsigned int zend_api;
-			};
-
-			const char *name;
-			int zend_api;
-
-			if ((((struct pre_4_1_0_module_entry *)module_entry)->zend_api > 20000000) &&
-				(((struct pre_4_1_0_module_entry *)module_entry)->zend_api < 20010901)
-			) {
-				name		= ((struct pre_4_1_0_module_entry *)module_entry)->name;
-				zend_api	= ((struct pre_4_1_0_module_entry *)module_entry)->zend_api;
-			} else {
-				name		= module_entry->name;
-				zend_api	= module_entry->zend_api;
-			}
-
 			php_error_docref(NULL, error_type,
 					"%s: Unable to initialize module\n"
 					"Module compiled with module API=%d\n"
 					"PHP    compiled with module API=%d\n"
 					"These options need to match\n",
-					name, zend_api, ZEND_MODULE_API_NO);
+					module_entry->name, module_entry->zend_api, ZEND_MODULE_API_NO);
 			DL_UNLOAD(handle);
 			return FAILURE;
 	}
@@ -283,7 +249,7 @@ PHP_MINFO_FUNCTION(dl)
 PHPAPI void php_dl(char *file, int type, zval *return_value, int start_now)
 {
 	php_error_docref(NULL, E_WARNING, "Cannot dynamically load %s - dynamic modules are not supported", file);
-	RETURN_FALSE;
+	RETVAL_FALSE;
 }
 
 PHP_MINFO_FUNCTION(dl)

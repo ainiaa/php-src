@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -42,6 +42,8 @@
 #ifdef PHP_WIN32
 # include "win32/winutil.h"
 # include "win32/time.h"
+# include "win32/ioutil.h"
+# include "win32/readdir.h"
 #endif
 
 #define php_stream_fopen_from_fd_int(fd, mode, persistent_id)	_php_stream_fopen_from_fd_int((fd), (mode), (persistent_id) STREAMS_CC)
@@ -49,7 +51,7 @@
 #define php_stream_fopen_from_file_int(file, mode)	_php_stream_fopen_from_file_int((file), (mode) STREAMS_CC)
 #define php_stream_fopen_from_file_int_rel(file, mode)	 _php_stream_fopen_from_file_int((file), (mode) STREAMS_REL_CC)
 
-#if !defined(WINDOWS) && !defined(NETWARE)
+#ifndef PHP_WIN32
 extern int php_get_uid_by_name(const char *name, uid_t *uid);
 extern int php_get_gid_by_name(const char *name, gid_t *gid);
 #endif
@@ -94,6 +96,12 @@ PHPAPI int php_stream_parse_fopen_modes(const char *mode, int *open_flags)
 		flags |= O_RDONLY;
 	}
 
+#if defined(O_CLOEXEC)
+	if (strchr(mode, 'e')) {
+		flags |= O_CLOEXEC;
+	}
+#endif
+
 #if defined(O_NONBLOCK)
 	if (strchr(mode, 'n')) {
 		flags |= O_NONBLOCK;
@@ -121,10 +129,11 @@ typedef struct {
 	unsigned is_process_pipe:1;	/* use pclose instead of fclose */
 	unsigned is_pipe:1;			/* don't try and seek */
 	unsigned cached_fstat:1;	/* sb is valid */
-	unsigned _reserved:29;
-	
+	unsigned is_pipe_blocking:1; /* allow blocking read() on pipes, currently Windows only */
+	unsigned _reserved:28;
+
 	int lock_flag;			/* stores the lock state */
-	char *temp_file_name;	/* if non-null, this is the path to a temporary file that
+	zend_string *temp_name;	/* if non-null, this is the path to a temporary file that
 							 * is to be deleted when the stream is closed */
 #if HAVE_FLUSHIO
 	char last_op;
@@ -148,7 +157,7 @@ static int do_fstat(php_stdio_stream_data *d, int force)
 	if (!d->cached_fstat || force) {
 		int fd;
 		int r;
-	   
+
 		PHP_STDIOP_GET_FD(fd, d);
 		r = zend_fstat(fd, &d->sb);
 		d->cached_fstat = r == 0;
@@ -161,38 +170,44 @@ static int do_fstat(php_stdio_stream_data *d, int force)
 static php_stream *_php_stream_fopen_from_fd_int(int fd, const char *mode, const char *persistent_id STREAMS_DC)
 {
 	php_stdio_stream_data *self;
-	
+
 	self = pemalloc_rel_orig(sizeof(*self), persistent_id);
 	memset(self, 0, sizeof(*self));
 	self->file = NULL;
 	self->is_pipe = 0;
 	self->lock_flag = LOCK_UN;
 	self->is_process_pipe = 0;
-	self->temp_file_name = NULL;
+	self->temp_name = NULL;
 	self->fd = fd;
-	
+#ifdef PHP_WIN32
+	self->is_pipe_blocking = 0;
+#endif
+
 	return php_stream_alloc_rel(&php_stream_stdio_ops, self, persistent_id, mode);
 }
 
 static php_stream *_php_stream_fopen_from_file_int(FILE *file, const char *mode STREAMS_DC)
 {
 	php_stdio_stream_data *self;
-	
+
 	self = emalloc_rel_orig(sizeof(*self));
 	memset(self, 0, sizeof(*self));
 	self->file = file;
 	self->is_pipe = 0;
 	self->lock_flag = LOCK_UN;
 	self->is_process_pipe = 0;
-	self->temp_file_name = NULL;
+	self->temp_name = NULL;
 	self->fd = fileno(file);
+#ifdef PHP_WIN32
+	self->is_pipe_blocking = 0;
+#endif
 
 	return php_stream_alloc_rel(&php_stream_stdio_ops, self, 0, mode);
 }
 
-PHPAPI php_stream *_php_stream_fopen_temporary_file(const char *dir, const char *pfx, char **opened_path_ptr STREAMS_DC)
+PHPAPI php_stream *_php_stream_fopen_temporary_file(const char *dir, const char *pfx, zend_string **opened_path_ptr STREAMS_DC)
 {
-	char *opened_path = NULL;
+	zend_string *opened_path = NULL;
 	int fd;
 
 	fd = php_open_temporary_fd(dir, pfx, &opened_path);
@@ -207,11 +222,11 @@ PHPAPI php_stream *_php_stream_fopen_temporary_file(const char *dir, const char 
 		if (stream) {
 			php_stdio_stream_data *self = (php_stdio_stream_data*)stream->abstract;
 			stream->wrapper = &php_plain_files_wrapper;
-			stream->orig_path = estrdup(opened_path);
+			stream->orig_path = estrndup(ZSTR_VAL(opened_path), ZSTR_LEN(opened_path));
 
-			self->temp_file_name = opened_path;
+			self->temp_name = opened_path;
 			self->lock_flag = LOCK_UN;
-			
+
 			return stream;
 		}
 		close(fd);
@@ -249,7 +264,7 @@ PHPAPI php_stream *_php_stream_fopen_from_fd(int fd, const char *mode, const cha
 			}
 		}
 #endif
-	
+
 		if (self->is_pipe) {
 			stream->flags |= PHP_STREAM_FLAG_NO_SEEK;
 		} else {
@@ -288,7 +303,7 @@ PHPAPI php_stream *_php_stream_fopen_from_file(FILE *file, const char *mode STRE
 			}
 		}
 #endif
-	
+
 		if (self->is_pipe) {
 			stream->flags |= PHP_STREAM_FLAG_NO_SEEK;
 		} else {
@@ -311,7 +326,10 @@ PHPAPI php_stream *_php_stream_fopen_from_pipe(FILE *file, const char *mode STRE
 	self->lock_flag = LOCK_UN;
 	self->is_process_pipe = 1;
 	self->fd = fileno(file);
-	self->temp_file_name = NULL;
+	self->temp_name = NULL;
+#ifdef PHP_WIN32
+	self->is_pipe_blocking = 0;
+#endif
 
 	stream = php_stream_alloc_rel(&php_stream_stdio_ops, self, 0, mode);
 	stream->flags |= PHP_STREAM_FLAG_NO_SEEK;
@@ -326,7 +344,11 @@ static size_t php_stdiop_write(php_stream *stream, const char *buf, size_t count
 
 	if (data->fd >= 0) {
 #ifdef PHP_WIN32
-		int bytes_written = write(data->fd, buf, (unsigned int)count);
+		int bytes_written;
+		if (ZEND_SIZE_T_UINT_OVFL(count)) {
+			count = UINT_MAX;
+		}
+		bytes_written = _write(data->fd, buf, (unsigned int)count);
 #else
 		int bytes_written = write(data->fd, buf, count);
 #endif
@@ -336,7 +358,7 @@ static size_t php_stdiop_write(php_stream *stream, const char *buf, size_t count
 
 #if HAVE_FLUSHIO
 		if (!data->is_pipe && data->last_op == 'r') {
-			fseek(data->file, 0, SEEK_CUR);
+			zend_fseek(data->file, 0, SEEK_CUR);
 		}
 		data->last_op = 'w';
 #endif
@@ -356,7 +378,7 @@ static size_t php_stdiop_read(php_stream *stream, char *buf, size_t count)
 #ifdef PHP_WIN32
 		php_stdio_stream_data *self = (php_stdio_stream_data*)stream->abstract;
 
-		if (self->is_pipe || self->is_process_pipe) {
+		if ((self->is_pipe || self->is_process_pipe) && !self->is_pipe_blocking) {
 			HANDLE ph = (HANDLE)_get_osfhandle(data->fd);
 			int retry = 0;
 			DWORD avail_read = 0;
@@ -368,11 +390,11 @@ static size_t php_stdiop_read(php_stream *stream, char *buf, size_t count)
 				if (!PeekNamedPipe(ph, NULL, 0, NULL, &avail_read, NULL)) {
 					break;
 				}
-				/* If there's nothing to read, wait in 100ms periods. */
+				/* If there's nothing to read, wait in 10ms periods. */
 				if (0 == avail_read) {
-					usleep(100000);
+					usleep(10);
 				}
-			} while (0 == avail_read && retry++ < 320);
+			} while (0 == avail_read && retry++ < 3200000);
 
 			/* Reduce the required data amount to what is available, otherwise read()
 				will block.*/
@@ -389,9 +411,9 @@ static size_t php_stdiop_read(php_stream *stream, char *buf, size_t count)
 			   so script can retry if desired */
 			ret = read(data->fd, buf,  PLAIN_WRAP_BUF_SIZE(count));
 		}
-		
+
 		stream->eof = (ret == 0 || (ret == (size_t)-1 && errno != EWOULDBLOCK && errno != EINTR && errno != EBADF));
-				
+
 	} else {
 #if HAVE_FLUSHIO
 		if (!data->is_pipe && data->last_op == 'w')
@@ -428,7 +450,7 @@ static int php_stdiop_close(php_stream *stream, int close_handle)
 		data->file_mapping = NULL;
 	}
 #endif
-	
+
 	if (close_handle) {
 		if (data->file) {
 			if (data->is_process_pipe) {
@@ -450,11 +472,15 @@ static int php_stdiop_close(php_stream *stream, int close_handle)
 		} else {
 			return 0; /* everything should be closed already -> success */
 		}
-		if (data->temp_file_name) {
-			unlink(data->temp_file_name);
+		if (data->temp_name) {
+#ifdef PHP_WIN32
+			php_win32_ioutil_unlink(ZSTR_VAL(data->temp_name));
+#else
+			unlink(ZSTR_VAL(data->temp_name));
+#endif
 			/* temporary streams are never persistent */
-			efree(data->temp_file_name);
-			data->temp_file_name = NULL;
+			zend_string_release(data->temp_name);
+			data->temp_name = NULL;
 		}
 	} else {
 		ret = 0;
@@ -498,14 +524,14 @@ static int php_stdiop_seek(php_stream *stream, zend_off_t offset, int whence, ze
 
 	if (data->fd >= 0) {
 		zend_off_t result;
-		
+
 		result = zend_lseek(data->fd, offset, whence);
 		if (result == (zend_off_t)-1)
 			return -1;
 
 		*newoffset = result;
 		return 0;
-		
+
 	} else {
 		ret = zend_fseek(data->file, offset, whence);
 		*newoffset = zend_ftell(data->file);
@@ -519,7 +545,7 @@ static int php_stdiop_cast(php_stream *stream, int castas, void **ret)
 	php_stdio_stream_data *data = (php_stdio_stream_data*) stream->abstract;
 
 	assert(data != NULL);
-	
+
 	/* as soon as someone touches the stdio layer, buffering may ensue,
 	 * so we need to stop using the fd directly in that case */
 
@@ -537,7 +563,7 @@ static int php_stdiop_cast(php_stream *stream, int castas, void **ret)
 						return FAILURE;
 					}
 				}
-				
+
 				*(FILE**)ret = data->file;
 				data->fd = SOCK_ERR;
 			}
@@ -577,9 +603,10 @@ static int php_stdiop_stat(php_stream *stream, php_stream_statbuf *ssb)
 	php_stdio_stream_data *data = (php_stdio_stream_data*) stream->abstract;
 
 	assert(data != NULL);
+	if((ret = do_fstat(data, 1)) == 0) {
+		memcpy(&ssb->sb, &data->sb, sizeof(ssb->sb));
+	}
 
-	ret = do_fstat(data, 1);
-	memcpy(&ssb->sb, &data->sb, sizeof(ssb->sb));
 	return ret;
 }
 
@@ -593,9 +620,9 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 	int flags;
 	int oldval;
 #endif
-	
+
 	PHP_STDIOP_GET_FD(fd, data);
-	
+
 	switch(option) {
 		case PHP_STREAM_OPTION_BLOCKING:
 			if (fd == -1)
@@ -607,20 +634,20 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 				flags &= ~O_NONBLOCK;
 			else
 				flags |= O_NONBLOCK;
-			
+
 			if (-1 == fcntl(fd, F_SETFL, flags))
 				return -1;
 			return oldval;
 #else
 			return -1; /* not yet implemented */
 #endif
-			
+
 		case PHP_STREAM_OPTION_WRITE_BUFFER:
 
 			if (data->file == NULL) {
 				return -1;
 			}
-			
+
 			if (ptrparam)
 				size = *(size_t *)ptrparam;
 			else
@@ -629,10 +656,10 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 			switch(value) {
 				case PHP_STREAM_BUFFER_NONE:
 					return setvbuf(data->file, NULL, _IONBF, 0);
-					
+
 				case PHP_STREAM_BUFFER_LINE:
 					return setvbuf(data->file, NULL, _IOLBF, size);
-					
+
 				case PHP_STREAM_BUFFER_FULL:
 					return setvbuf(data->file, NULL, _IOFBF, size);
 
@@ -640,7 +667,7 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 					return -1;
 			}
 			break;
-		
+
 		case PHP_STREAM_OPTION_LOCKING:
 			if (fd == -1) {
 				return -1;
@@ -663,13 +690,15 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 			{
 				php_stream_mmap_range *range = (php_stream_mmap_range*)ptrparam;
 				int prot, flags;
-				
+
 				switch (value) {
 					case PHP_STREAM_MMAP_SUPPORTED:
 						return fd == -1 ? PHP_STREAM_OPTION_RETURN_ERR : PHP_STREAM_OPTION_RETURN_OK;
 
 					case PHP_STREAM_MMAP_MAP_RANGE:
-						do_fstat(data, 1);
+						if(do_fstat(data, 1) != 0) {
+							return PHP_STREAM_OPTION_RETURN_ERR;
+						}
 						if (range->length == 0 && range->offset > 0 && range->offset < data->sb.st_size) {
 							range->length = data->sb.st_size - range->offset;
 						}
@@ -828,7 +857,25 @@ static int php_stdiop_set_option(php_stream *stream, int option, int value, void
 					return ftruncate(fd, new_size) == 0 ? PHP_STREAM_OPTION_RETURN_OK : PHP_STREAM_OPTION_RETURN_ERR;
 				}
 			}
-			
+
+#ifdef PHP_WIN32
+		case PHP_STREAM_OPTION_PIPE_BLOCKING:
+			data->is_pipe_blocking = value;
+			return PHP_STREAM_OPTION_RETURN_OK;
+#endif
+		case PHP_STREAM_OPTION_META_DATA_API:
+			if (fd == -1)
+				return -1;
+#ifdef O_NONBLOCK
+			flags = fcntl(fd, F_GETFL, 0);
+
+			add_assoc_bool((zval*)ptrparam, "timed_out", 0);
+			add_assoc_bool((zval*)ptrparam, "blocked", (flags & O_NONBLOCK)? 0 : 1);
+			add_assoc_bool((zval*)ptrparam, "eof", stream->eof);
+
+			return PHP_STREAM_OPTION_RETURN_OK;
+#endif
+			return -1;
 		default:
 			return PHP_STREAM_OPTION_RETURN_NOTIMPL;
 	}
@@ -887,7 +934,7 @@ static php_stream_ops	php_plain_files_dirstream_ops = {
 };
 
 static php_stream *php_plain_files_dir_opener(php_stream_wrapper *wrapper, const char *path, const char *mode,
-		int options, char **opened_path, php_stream_context *context STREAMS_DC)
+		int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	DIR *dir = NULL;
 	php_stream *stream = NULL;
@@ -901,7 +948,7 @@ static php_stream *php_plain_files_dir_opener(php_stream_wrapper *wrapper, const
 	if (((options & STREAM_DISABLE_OPEN_BASEDIR) == 0) && php_check_open_basedir(path)) {
 		return NULL;
 	}
-	
+
 	dir = VCWD_OPENDIR(path);
 
 #ifdef PHP_WIN32
@@ -919,15 +966,15 @@ static php_stream *php_plain_files_dir_opener(php_stream_wrapper *wrapper, const
 		if (stream == NULL)
 			closedir(dir);
 	}
-		
+
 	return stream;
 }
 /* }}} */
 
 /* {{{ php_stream_fopen */
-PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, char **opened_path, int options STREAMS_DC)
+PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, zend_string **opened_path, int options STREAMS_DC)
 {
-	char *realpath = NULL;
+	char realpath[MAXPATHLEN];
 	int open_flags;
 	int fd;
 	php_stream *ret;
@@ -942,9 +989,9 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 	}
 
 	if (options & STREAM_ASSUME_REALPATH) {
-		realpath = estrdup(filename);
+		strlcpy(realpath, filename, sizeof(realpath));
 	} else {
-		if ((realpath = expand_filepath(filename, NULL)) == NULL) {
+		if (expand_filepath(filename, realpath) == NULL) {
 			return NULL;
 		}
 	}
@@ -954,22 +1001,21 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 		switch (php_stream_from_persistent_id(persistent_id, &ret)) {
 			case PHP_STREAM_PERSISTENT_SUCCESS:
 				if (opened_path) {
-					*opened_path = realpath;
-					realpath = NULL;
+					//TODO: avoid reallocation???
+					*opened_path = zend_string_init(realpath, strlen(realpath), 0);
 				}
 				/* fall through */
 
 			case PHP_STREAM_PERSISTENT_FAILURE:
-				if (realpath) {
-					efree(realpath);
-				}
-				efree(persistent_id);;
+				efree(persistent_id);
 				return ret;
 		}
 	}
-	
+#ifdef PHP_WIN32
+	fd = php_win32_ioutil_open(realpath, open_flags, 0666);
+#else
 	fd = open(realpath, open_flags, 0666);
-
+#endif
 	if (fd != -1)	{
 
 		if (options & STREAM_OPEN_FOR_INCLUDE) {
@@ -980,11 +1026,7 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 
 		if (ret)	{
 			if (opened_path) {
-				*opened_path = realpath;
-				realpath = NULL;
-			}
-			if (realpath) {
-				efree(realpath);
+				*opened_path = zend_string_init(realpath, strlen(realpath), 0);
 			}
 			if (persistent_id) {
 				efree(persistent_id);
@@ -1002,12 +1044,17 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 				r = do_fstat(self, 0);
 				if ((r == 0 && !S_ISREG(self->sb.st_mode))) {
 					if (opened_path) {
-						efree(*opened_path);
+						zend_string_release(*opened_path);
 						*opened_path = NULL;
 					}
 					php_stream_close(ret);
 					return NULL;
 				}
+			}
+
+			if (options & STREAM_USE_BLOCKING_PIPE) {
+				php_stdio_stream_data *self = (php_stdio_stream_data*)ret->abstract;
+				self->is_pipe_blocking = 1;
 			}
 #endif
 
@@ -1015,7 +1062,6 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 		}
 		close(fd);
 	}
-	efree(realpath);
 	if (persistent_id) {
 		efree(persistent_id);
 	}
@@ -1025,7 +1071,7 @@ PHPAPI php_stream *_php_stream_fopen(const char *filename, const char *mode, cha
 
 
 static php_stream *php_plain_files_stream_opener(php_stream_wrapper *wrapper, const char *path, const char *mode,
-		int options, char **opened_path, php_stream_context *context STREAMS_DC)
+		int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	if (((options & STREAM_DISABLE_OPEN_BASEDIR) == 0) && php_check_open_basedir(path)) {
 		return NULL;
@@ -1045,10 +1091,8 @@ static int php_plain_files_url_stater(php_stream_wrapper *wrapper, const char *u
 	}
 
 #ifdef PHP_WIN32
-	if (EG(windows_version_info).dwMajorVersion >= 5) {
-		if (flags & PHP_STREAM_URL_STAT_LINK) {
-			return VCWD_LSTAT(url, &ssb->sb);
-		}
+	if (flags & PHP_STREAM_URL_STAT_LINK) {
+		return VCWD_LSTAT(url, &ssb->sb);
 	}
 #else
 # ifdef HAVE_SYMLINK
@@ -1095,11 +1139,11 @@ static int php_plain_files_rename(php_stream_wrapper *wrapper, const char *url_f
 	}
 
 #ifdef PHP_WIN32
-	if (!php_win32_check_trailing_space(url_from, (int)strlen(url_from))) {
+	if (!php_win32_check_trailing_space(url_from, strlen(url_from))) {
 		php_win32_docref2_from_error(ERROR_INVALID_NAME, url_from, url_to);
 		return 0;
 	}
-	if (!php_win32_check_trailing_space(url_to, (int)strlen(url_to))) {
+	if (!php_win32_check_trailing_space(url_to, strlen(url_to))) {
 		php_win32_docref2_from_error(ERROR_INVALID_NAME, url_from, url_to);
 		return 0;
 	}
@@ -1126,7 +1170,7 @@ static int php_plain_files_rename(php_stream_wrapper *wrapper, const char *url_f
 			zend_stat_t sb;
 			if (php_copy_file(url_from, url_to) == SUCCESS) {
 				if (VCWD_STAT(url_from, &sb) == 0) {
-#  if !defined(TSRM_WIN32) && !defined(NETWARE)
+#  ifndef TSRM_WIN32
 					if (VCWD_CHMOD(url_to, sb.st_mode)) {
 						if (errno == EPERM) {
 							php_error_docref2(NULL, url_from, url_to, E_WARNING, "%s", strerror(errno));
@@ -1185,8 +1229,7 @@ static int php_plain_files_mkdir(php_stream_wrapper *wrapper, const char *dir, i
 		/* we look for directory separator from the end of string, thus hopefuly reducing our work load */
 		char *e;
 		zend_stat_t sb;
-		int dir_len = (int)strlen(dir);
-		int offset = 0;
+		size_t dir_len = strlen(dir), offset = 0;
 		char buf[MAXPATHLEN];
 
 		if (!expand_filepath_with_mode(dir, buf, NULL, 0, CWD_EXPAND )) {
@@ -1201,7 +1244,7 @@ static int php_plain_files_mkdir(php_stream_wrapper *wrapper, const char *dir, i
 		}
 
 		if (p && dir_len == 1) {
-			/* buf == "DEFAULT_SLASH" */	
+			/* buf == "DEFAULT_SLASH" */
 		}
 		else {
 			/* find a top level directory we need to create */
@@ -1266,8 +1309,8 @@ static int php_plain_files_rmdir(php_stream_wrapper *wrapper, const char *url, i
 		return 0;
 	}
 
-#if PHP_WIN32
-	if (!php_win32_check_trailing_space(url, (int)strlen(url))) {
+#ifdef PHP_WIN32
+	if (!php_win32_check_trailing_space(url, strlen(url))) {
 		php_error_docref1(NULL, url, E_WARNING, "%s", strerror(ENOENT));
 		return 0;
 	}
@@ -1287,18 +1330,15 @@ static int php_plain_files_rmdir(php_stream_wrapper *wrapper, const char *url, i
 static int php_plain_files_metadata(php_stream_wrapper *wrapper, const char *url, int option, void *value, php_stream_context *context)
 {
 	struct utimbuf *newtime;
-#if !defined(WINDOWS) && !defined(NETWARE)
+#ifndef PHP_WIN32
 	uid_t uid;
 	gid_t gid;
 #endif
 	mode_t mode;
 	int ret = 0;
-#if PHP_WIN32
-	int url_len = (int)strlen(url);
-#endif
 
-#if PHP_WIN32
-	if (!php_win32_check_trailing_space(url, url_len)) {
+#ifdef PHP_WIN32
+	if (!php_win32_check_trailing_space(url, strlen(url))) {
 		php_error_docref1(NULL, url, E_WARNING, "%s", strerror(ENOENT));
 		return 0;
 	}
@@ -1326,7 +1366,7 @@ static int php_plain_files_metadata(php_stream_wrapper *wrapper, const char *url
 
 			ret = VCWD_UTIME(url, newtime);
 			break;
-#if !defined(WINDOWS) && !defined(NETWARE)
+#ifndef PHP_WIN32
 		case PHP_STREAM_META_OWNER_NAME:
 		case PHP_STREAM_META_OWNER:
 			if(option == PHP_STREAM_META_OWNER_NAME) {
@@ -1341,7 +1381,7 @@ static int php_plain_files_metadata(php_stream_wrapper *wrapper, const char *url
 			break;
 		case PHP_STREAM_META_GROUP:
 		case PHP_STREAM_META_GROUP_NAME:
-			if(option == PHP_STREAM_META_OWNER_NAME) {
+			if(option == PHP_STREAM_META_GROUP_NAME) {
 				if(php_get_gid_by_name((char *)value, &gid) != SUCCESS) {
 					php_error_docref1(NULL, url, E_WARNING, "Unable to find gid for %s", (char *)value);
 					return 0;
@@ -1390,17 +1430,15 @@ PHPAPI php_stream_wrapper php_plain_files_wrapper = {
 };
 
 /* {{{ php_stream_fopen_with_path */
-PHPAPI php_stream *_php_stream_fopen_with_path(const char *filename, const char *mode, const char *path, char **opened_path, int options STREAMS_DC)
+PHPAPI php_stream *_php_stream_fopen_with_path(const char *filename, const char *mode, const char *path, zend_string **opened_path, int options STREAMS_DC)
 {
 	/* code ripped off from fopen_wrappers.c */
 	char *pathbuf, *end;
 	const char *ptr;
-	const char *exec_fname;
 	char trypath[MAXPATHLEN];
 	php_stream *stream;
-	int path_length;
-	int filename_length;
-	int exec_fname_length;
+	size_t filename_length;
+	zend_string *exec_filename;
 
 	if (opened_path) {
 		*opened_path = NULL;
@@ -1410,7 +1448,10 @@ PHPAPI php_stream *_php_stream_fopen_with_path(const char *filename, const char 
 		return NULL;
 	}
 
-	filename_length = (int)strlen(filename);
+	filename_length = strlen(filename);
+#ifndef PHP_WIN32
+	(void) filename_length;
+#endif
 
 	/* Relative path open */
 	if (*filename == '.' && (IS_SLASH(filename[1]) || filename[1] == '.')) {
@@ -1442,7 +1483,7 @@ not_relative_path:
 
 		return php_stream_fopen_rel(filename, mode, opened_path, options);
 	}
-	
+
 #ifdef PHP_WIN32
 	if (IS_SLASH(filename[0])) {
 		size_t cwd_len;
@@ -1450,22 +1491,22 @@ not_relative_path:
 		cwd = virtual_getcwd_ex(&cwd_len);
 		/* getcwd() will return always return [DRIVE_LETTER]:/) on windows. */
 		*(cwd+3) = '\0';
-	
+
 		if (snprintf(trypath, MAXPATHLEN, "%s%s", cwd, filename) >= MAXPATHLEN) {
 			php_error_docref(NULL, E_NOTICE, "%s/%s path was truncated to %d", cwd, filename, MAXPATHLEN);
 		}
-		
+
 		efree(cwd);
-		
+
 		if (((options & STREAM_DISABLE_OPEN_BASEDIR) == 0) && php_check_open_basedir(trypath)) {
 			return NULL;
 		}
-		
+
 		return php_stream_fopen_rel(trypath, mode, opened_path, options);
 	}
 #endif
 
-	if (!path || (path && !*path)) {
+	if (!path || !*path) {
 		return php_stream_fopen_rel(filename, mode, opened_path, options);
 	}
 
@@ -1473,17 +1514,18 @@ not_relative_path:
 	/* append the calling scripts' current working directory
 	 * as a fall back case
 	 */
-	if (zend_is_executing()) {
-		exec_fname = zend_get_executed_filename();
-		exec_fname_length = (int)strlen(exec_fname);
-		path_length = (int)strlen(path);
+	if (zend_is_executing() &&
+	    (exec_filename = zend_get_executed_filename_ex()) != NULL) {
+		const char *exec_fname = ZSTR_VAL(exec_filename);
+		size_t exec_fname_length = ZSTR_LEN(exec_filename);
 
-		while ((--exec_fname_length >= 0) && !IS_SLASH(exec_fname[exec_fname_length]));
-		if ((exec_fname && exec_fname[0] == '[')
-				|| exec_fname_length<=0) {
-			/* [no active file] or no path */
+		while ((--exec_fname_length < SIZE_MAX) && !IS_SLASH(exec_fname[exec_fname_length]));
+		if (exec_fname_length<=0) {
+			/* no path */
 			pathbuf = estrdup(path);
 		} else {
+			size_t path_length = strlen(path);
+
 			pathbuf = (char *) emalloc(exec_fname_length + path_length +1 +1);
 			memcpy(pathbuf, path, path_length);
 			pathbuf[path_length] = DEFAULT_DIR_SEPARATOR;
@@ -1512,7 +1554,7 @@ not_relative_path:
 		if (((options & STREAM_DISABLE_OPEN_BASEDIR) == 0) && php_check_open_basedir_ex(trypath, 0)) {
 			goto stream_skip;
 		}
-		
+
 		stream = php_stream_fopen_rel(trypath, mode, opened_path, options);
 		if (stream) {
 			efree(pathbuf);

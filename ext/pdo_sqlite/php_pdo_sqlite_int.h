@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -41,7 +41,7 @@ struct pdo_sqlite_func {
 	zval func, step, fini;
 	int argc;
 	const char *funcname;
-	
+
 	/* accelerated callback references */
 	struct pdo_sqlite_fci afunc, astep, afini;
 };

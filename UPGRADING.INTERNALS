@@ -1,174 +1,52 @@
-$Id$
-
-PHP 7.0 INTERNALS UPGRADE NOTES
+PHP 7.2 INTERNALS UPGRADE NOTES
 
 1. Internal API changes
-  e. New data types
-  f. zend_parse_parameters() specs
-  g. sprintf() formats
-  h. HashTable API
-  i. New portable macros for large file support
-  j. New portable macros for integers
-  k. get_class_entry object handler info
-  l. get_class_name object handler info
-  m. Other portable macros info
-  n. ZEND_ENGINE_2 removal
-  o. Updated final class modifier
-  p. TSRM changes
+  a. Path related functions
+  b. php_win32_get_random_bytes()
+  c. nice() Windows implementation
+  d. ZEND_ACC_CLONE removed
+  e. IS_TYPE_IMMUTABLE removed
+  f. zend_arg_info.class_name removed
+  g. ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX changed
+  h. valid_symbol_table removed
 
 2. Build system changes
   a. Unix build system changes
   b. Windows build system changes
 
 
+3. Module changes
+
 ========================
 1. Internal API changes
 ========================
 
-  a. zend_set_memory_limit() now takes the TSRMLS_CC macro as its last argument
-  e. New data types
+  a. Path related functions
+    - CWD_API void realpath_cache_del(const char *path, size_t path_len);
+    - CWD_API realpath_cache_bucket* realpath_cache_lookup(const char *path, size_t path_len, time_t t);
+    - PHPAPI void php_clear_stat_cache(zend_bool clear_realpath_cache, const char *filename, size_t filename_len);
+    - PHPAPI void php_stat(const char *filename, size_t filename_length, int type, zval *return_value);
 
-     String
+  b. php_win32_get_random_bytes()
+    The internal randomness source on Windows switched to use CNG API.
 
-        Besides the old way of accepting the strings with 's', the new 'S' ZPP spec
-	was introduced. It expects an argument of the type zend_string *. String lengths
-	in it are bound to the size_t datatype.
+  c. nice() now have a Windows alternative that is implemented in win32/nice.c, using
+	   SetPriorityClass(). See the implementation for more in-depth details. This also 
+	   defines HAVE_NICE.
 
-     Integer types
+  d. ZEND_ACC_CLONE is removed, but was not used in previous versions
 
-	Integers do no more depend on the firm 'long' type. Instead a platform
-	dependent integer type is used, it is called zend_long. That datatype is
-	defined dynamically to guarantee the consistent 64 bit support. The zval 
-	field representing user land integer it bound to zend_long.
+  e. IS_TYPE_IMMUTABLE is removed, IS_TYPE_COPYABLE can be used instead
+     Z_IMMUTABLE() check function is still available
 
-	Signed integer is defined as zend_long, unsigned integer as zend_ulong
-	inside Zend. 
+  f. zend_arg_info class_name member is removed, use ZEND_TYPE_NAME instead
 
-     Other datatypes
+  g. ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX classname option is removed
+     use ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX for simple type
+     use ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX for object
 
-	zend_off_t  - portable off_t analogue
-	zend_stat_t - portable 'struct stat' analogue
-
-	These datatypes are declared to be portable across platforms. Thus, direct
-	usage of the functions like fseek, stat, etc. as well as direct usage of
-	off_t and struct stat is strongly not recommended. Instead the portable
-	macros should be used.
-
-	zend_fseek - portable fseek equivalent
-	zend_ftell - portable ftell equivalent
-	zend_lseek - portable lseek equivalent
-	zend_fstat - portable fstat equivalent
-	zend_stat  - portable stat equivalent
-
-  f. zend_parse_parameters() specs
-
-       The new spec 'S' introduced, which expects an argument of type zend_string *.
-       The 'l' spec expects a parameter of the type zend_long, not long anymore.
-       The 's' spec expects parameters of the type char * and size_t, no int anymore.
-
-  g. sprintf() formats
-
-       New printf modifier 'p' was implemented to platform independently output zend_long,
-       zend_ulong and php_size_t datatypes. That modifier can be used with'd', 'u', 'x' and 'o'
-       printf format specs with spprintf, snprintf and the wrapping printf implementations.
-       %pu is sufficient for both zend_ulong and php_size_t. the code using %p spec to output
-       pointer address might need to be enclosed into #ifdef when it unlickily followed by 'd',
-       'u', 'x' or 'o'.
-
-       The only exceptions are the snprintf and zend_sprintf functions yet, because in some cases
-       they can use the implemenations available on the system, not the PHP one. Fro snprintf the
-       the macros ZEND_INT_FMT ZEND_UINT_FMT should be used.
-
-  h. HashTable API
-
-       Datatype for array indexes was changed to zend_ulong, for string keys to zend_string *.
-
-  i. New portable macros for large file support
-
-      Function(s)       Alias           Comment
-      stat, _stat64     zend_stat   for use with zend_stat_t
-      fstat, _fstat64   zend_fstat  for use with zend_stat_t
-      lseek, _lseeki64  zend_lseek  for use with zend_off_t
-      ftell, _ftelli64  zend_ftell  for use with zend_off_t
-      fseek, _fseeki64  zend_fseek  for use with zend_off_t
-
-  j. New portable macros for integers
-
-      Function(s)                                         Alias             Comment
-      snprintf with "%ld" or "%lld", _ltoa_s, _i64toa_s   ZEND_LTOA         for use with zend_long
-      atol, atoll, _atoi64                                ZEND_ATOL         for use with zend_long
-      strtol, strtoll, _strtoi64                          ZEND_STRTOL       for use with zend_long
-      strtoul, strtoull, _strtoui64                       ZEND_STRTOUL      for use with zend_long
-      abs, llabs, _abs64                                  ZEND_ABS          for use with zend_long
-      -                                                   ZEND_LONG_MAX     replaces LONG_MAX where appropriate
-      -                                                   ZEND_LONG_MIN     replaces LONG_MIN where appropriate
-      -                                                   ZEND_ULONG_MAX    replaces ULONG_MAX where appropriate
-      -                                                   SIZEOF_ZEND_LONG  reworked SIZEOF_ZEND_LONG representing the size of zend_long datatype
-      -                                                   ZEND_SIZE_MAX     Max value of size_t
-
-  k. The get_class_entry object handler is no longer available. Instead
-     zend_object.ce is always used.
-
-  l. The get_class_name object handler is now only used for displaying class
-     names in debugging functions like var_dump(). It is no longer used in
-     get_class(), get_parent_class() or similar.
-
-     The handler is now obligatory, no longer accepts a `parent` argument and
-     must return a non-NULL zend_string*, which will be released by the caller.
-
-  m. Other portable macros info
-
-     ZEND_SECURE_ZERO     - zeroes chunk of memory
-     ZEND_VALID_SOCKET    - validates a php_socket_t variable 
-
-     ZEND_FASTCALL is defined to use __vectorcall convention on VS2013 and above
-     ZEND_NORETURN is defined as __declspec(noreturn) on VS
-
-  n. The ZEND_ENGINE_2 macro has been removed. A ZEND_ENGINE_3 macro has been added.
-  
-  o. Removed ZEND_ACC_FINAL_CLASS in favour of ZEND_ACC_FINAL, turning final class
-     modifier now a different class entry flag. Update your extensions.
-
-  p. TSRM changes
-
-     The TSRM layer undergone significant changes. It is not necessary anymore to 
-     pass the tsrm_ls pointer explicitly. The TSRMLS_* macros should not be used
-     in any new developments.
-
-     The recommended way accessing globals in TS builds is by implementing it
-     to use a local thread unique pointer to the corresponding data pool. These
-     are the new macros that serve to achieve this goal:
-
-     - ZEND_TSRMG - based on TSRMG and if static pointer for data pool access is
-       implemented, will use it
-     - ZEND_TSRMLS_CACHE_EXTERN - to be used in a header shared across multiple
-       C/C++ files
-     - ZEND_TSRMLS_CACHE_DEFINE - to be used in the main extension C/C++ file
-     - ZEND_TSRMLS_CACHE_UPDATE - to be integrated at the top of the globals
-       ctor or RINIT function
-     - ZEND_ENABLE_STATIC_TSRMLS_CACHE - to be used in the config.[m4|w32] for
-       enabling the globals access per thread unique pointer
-     - TSRMLS_CACHE - expands to the variable name which links to the thread
-       unique data pool
-
-     Note that usually it will work without implementing the globals access per
-     a thread unique pointer, however it might cause a slowdown. The reason is
-     that the access model to the extension/SAPI own globals as well as the
-     access to the core globals is determined in the compilation phase depending
-     on whether ZEND_ENABLE_STATIC_TSRMLS_CACHE macro is defined. 
-
-     Due to the current compiler evolution state, the TSRMLS_CACHE pointer
-     (when implemented) has to be present and updated in every binary unit which
-     is not compiled statically into PHP. So any DLL, DSO, EXE, etc. has to take
-     care about defining and updating it's TSRMLS cache. An update should happen
-     before any globals was accessed.
-
-     Porting an extension or SAPI is usually as easy as removing all the TSRMLS_*
-     ocurrences and integrating the macros mentioned above. However if tsrm_ls
-     is used explicitly, its usage can considered obsolete in most cases.
-     Additionally, if an extension triggers its own threads, TSRMLS_CACHE shouldn't
-     be passed to that threads directly.
-
+  h. valid_symbol_table is removed from executor_globals.
+     Use EG(active) instead of removed EG(valid_symbol_table)
 
 ========================
 2. Build system changes
@@ -178,18 +56,28 @@ PHP 7.0 INTERNALS UPGRADE NOTES
 
   b. Windows build system changes
 
-     - Besides Visual Studio, building with Clang or Intel Composer is now
-       possible. To enable an alternative toolset, add the option
-       --with-toolset=[vs,clang,icc] to the configure line. The default
-       toolset is vs. Still clang or icc need the correct environment
-       which involves many tools from the vs toolset.
+    .  Minimum supported Windows versions are Windows 7/Server 2008 R2.
+    . --enable-one-shot configure option is removed, --with-mp is usable.
+    . The new binary tools SDK is required for Windows builds, the
+      documentation is available under https://wiki.php.net/internals/windows/stepbystepbuild_sdk_2
+    . Visual Studio 2017 is utilized for the Windows builds
+    . Clang build with ASAN is supported with clang 5+
 
-       The toolset option is supported by phpize as well.
+========================
+3. Module changes
+========================
 
-       AWARENESS The only recommended and supported toolset to produce production
-       ready binaries is Visual Studio. Still other compilers can be used now for
-       testing and analyzing purposes.
+- Pcre:
+  . php_pcre_replace and php_pcre_replace_impl expect a zend_string instead of a zval and
+    is_callable_replace options is removed:
+    - PHPAPI zend_string *php_pcre_replace(zend_string *regex, zend_string *subject_str, char *subject, int subject_len, zend_string *replace_str, int limit, int *replace_count);
+    - PHPAPI zend_string *php_pcre_replace_impl(pcre_cache_entry *pce, zend_string *subject_str, char *subject, int subject_len, zend_string *replace_str, int limit, int *replace_count);
 
-     - configure.js now produces response files which are passed to the linker
-       and library manager. This solves the issues with the long command lines
-       which can exceed the OS limit.
+- Session:
+  . php_session_start()/session_reset_id() return value is changed from void to int.
+    It returns SUCCESS/FAILURE.
+  . Session module manages session status correctly.
+
+- OpenSSL:
+  . Windows builds ship with OpenSSL 1.1 by default, lower versions are still supported with custom deps.
+

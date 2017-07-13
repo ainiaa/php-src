@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -58,7 +58,6 @@ struct _php_core_globals {
 
 	zend_long output_buffering;
 
-	zend_bool sql_safe_mode;
 	zend_bool enable_dl;
 
 	char *output_handler;
@@ -89,7 +88,7 @@ struct _php_core_globals {
 
 	char *upload_tmp_dir;
 	zend_long upload_max_filesize;
-	
+
 	char *error_append_string;
 	char *error_prepend_string;
 
@@ -142,10 +141,11 @@ struct _php_core_globals {
 	char *last_error_file;
 	int  last_error_lineno;
 
+	char *php_sys_temp_dir;
+
 	char *disable_functions;
 	char *disable_classes;
 	zend_bool allow_url_include;
-	zend_bool exit_on_timeout;
 #ifdef PHP_WIN32
 	zend_bool com_initialized;
 #endif
@@ -176,4 +176,6 @@ struct _php_core_globals {
  * tab-width: 4
  * c-basic-offset: 4
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

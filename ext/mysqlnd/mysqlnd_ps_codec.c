@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2014 The PHP Group                                |
+  | Copyright (c) 2006-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -12,20 +12,19 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Authors: Andrey Hristov <andrey@mysql.com>                           |
-  |          Ulf Wendel <uwendel@mysql.com>                              |
-  |          Georg Richter <georg@mysql.com>                             |
+  | Authors: Andrey Hristov <andrey@php.net>                             |
+  |          Ulf Wendel <uw@php.net>                                     |
   +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
 #include "php.h"
 #include "mysqlnd.h"
 #include "mysqlnd_wireprotocol.h"
+#include "mysqlnd_connection.h"
+#include "mysqlnd_ps.h"
 #include "mysqlnd_priv.h"
 #include "mysqlnd_debug.h"
-
-#define MYSQLND_SILENT
+#include "mysql_float_to_double.h"
 
 
 enum mysqlnd_timestamp_type
@@ -54,8 +53,8 @@ struct st_mysqlnd_perm_bind mysqlnd_ps_fetch_functions[MYSQL_TYPE_LAST + 1];
 
 /* {{{ ps_fetch_from_1_to_8_bytes */
 void
-ps_fetch_from_1_to_8_bytes(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len,
-						   zend_uchar ** row, unsigned int byte_count)
+ps_fetch_from_1_to_8_bytes(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len,
+						   const zend_uchar ** row, unsigned int byte_count)
 {
 	char tmp[22];
 	size_t tmp_len = 0;
@@ -80,7 +79,7 @@ ps_fetch_from_1_to_8_bytes(zval * zv, const MYSQLND_FIELD * const field, unsigne
 		if (uval > INT_MAX) {
 			DBG_INF("stringify");
 			tmp_len = sprintf((char *)&tmp, MYSQLND_LLU_SPEC, uval);
-		} else 
+		} else
 #endif /* #if SIZEOF_LONG==4 */
 		{
 			if (byte_count < 8 || uval <= L64(9223372036854775807)) {
@@ -88,6 +87,7 @@ ps_fetch_from_1_to_8_bytes(zval * zv, const MYSQLND_FIELD * const field, unsigne
 			} else {
 				DBG_INF("stringify");
 				tmp_len = sprintf((char *)&tmp, MYSQLND_LLU_SPEC, uval);
+				DBG_INF_FMT("value=%s", tmp);
 			}
 		}
 	} else {
@@ -127,7 +127,7 @@ ps_fetch_from_1_to_8_bytes(zval * zv, const MYSQLND_FIELD * const field, unsigne
 
 /* {{{ ps_fetch_null */
 static void
-ps_fetch_null(zval *zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_null(zval *zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	ZVAL_NULL(zv);
 }
@@ -136,7 +136,7 @@ ps_fetch_null(zval *zv, const MYSQLND_FIELD * const field, unsigned int pack_len
 
 /* {{{ ps_fetch_int8 */
 static void
-ps_fetch_int8(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_int8(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	ps_fetch_from_1_to_8_bytes(zv, field, pack_len, row, 1);
 }
@@ -145,7 +145,7 @@ ps_fetch_int8(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_le
 
 /* {{{ ps_fetch_int16 */
 static void
-ps_fetch_int16(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_int16(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	ps_fetch_from_1_to_8_bytes(zv, field, pack_len, row, 2);
 }
@@ -154,7 +154,7 @@ ps_fetch_int16(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_l
 
 /* {{{ ps_fetch_int32 */
 static void
-ps_fetch_int32(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_int32(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	ps_fetch_from_1_to_8_bytes(zv, field, pack_len, row, 4);
 }
@@ -163,7 +163,7 @@ ps_fetch_int32(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_l
 
 /* {{{ ps_fetch_int64 */
 static void
-ps_fetch_int64(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_int64(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	ps_fetch_from_1_to_8_bytes(zv, field, pack_len, row, 8);
 }
@@ -172,7 +172,7 @@ ps_fetch_int64(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_l
 
 /* {{{ ps_fetch_float */
 static void
-ps_fetch_float(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_float(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	float fval;
 	double dval;
@@ -181,55 +181,11 @@ ps_fetch_float(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_l
 	(*row)+= 4;
 	DBG_INF_FMT("value=%f", fval);
 
-	/*
-	 * The following is needed to correctly support 4-byte floats.
-	 * Otherwise, a value of 9.99 in a FLOAT column comes out of mysqli
-	 * as 9.9998998641968.
-	 *
-	 * For GCC, we use the built-in decimal support to "up-convert" a
-	 * 4-byte float to a 8-byte double.
-	 * When that is not available, we fall back to converting the float
-	 * to a string and then converting the string to a double. This mimics
-	 * what MySQL does.
-	 */
-#ifdef HAVE_DECIMAL_FP_SUPPORT
-	{
-		typedef float dec32 __attribute__((mode(SD)));
-		/* volatile so the compiler will not optimize away the conversion */
-		volatile dec32 d32val = fval;
-
-		/* The following cast is guaranteed to do the right thing */
-		dval = (double) d32val;
-	}
-#elif defined(PHP_WIN32)
-	{
-		/* float datatype on Winows is already 4 byte but has a precision of 7 digits */
-		char num_buf[2048];
-		(void)_gcvt_s(num_buf, 2048, fval, field->decimals >= 31 ? 7 : field->decimals);
-		dval = zend_strtod(num_buf, NULL);
-	}
-#else
-	{
-		char num_buf[2048]; /* Over allocated */
-		char *s;
-
-#ifndef FLT_DIG
-# define FLT_DIG 6
+#ifndef NOT_FIXED_DEC
+# define NOT_FIXED_DEC 31
 #endif
-		/* Convert to string. Ignoring localization, etc.
-		 * Following MySQL's rules. If precision is undefined (NOT_FIXED_DEC i.e. 31)
-		 * or larger than 31, the value is limited to 6 (FLT_DIG).
-		 */
-		s = php_gcvt(fval,
-			     field->decimals >= 31 ? FLT_DIG : field->decimals,
-			     '.',
-			     'e',
-			     num_buf);
 
-		/* And now convert back to double */
-		dval = zend_strtod(s, NULL);
-	}
-#endif
+	dval = mysql_float_to_double(fval, (field->decimals >= NOT_FIXED_DEC) ? -1 : (int)field->decimals);
 
 	ZVAL_DOUBLE(zv, dval);
 	DBG_VOID_RETURN;
@@ -239,7 +195,7 @@ ps_fetch_float(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_l
 
 /* {{{ ps_fetch_double */
 static void
-ps_fetch_double(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_double(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	double value;
 	DBG_ENTER("ps_fetch_double");
@@ -254,7 +210,7 @@ ps_fetch_double(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_
 
 /* {{{ ps_fetch_time */
 static void
-ps_fetch_time(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_time(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	struct st_mysqlnd_time t;
 	zend_ulong length; /* First byte encodes the length*/
@@ -262,7 +218,7 @@ ps_fetch_time(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_le
 	DBG_ENTER("ps_fetch_time");
 
 	if ((length = php_mysqlnd_net_field_length(row))) {
-		zend_uchar * to= *row;
+		const zend_uchar * to = *row;
 
 		t.time_type = MYSQLND_TIMESTAMP_TIME;
 		t.neg			= (zend_bool) to[0];
@@ -297,7 +253,7 @@ ps_fetch_time(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_le
 
 /* {{{ ps_fetch_date */
 static void
-ps_fetch_date(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_date(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	struct st_mysqlnd_time t = {0};
 	zend_ulong length; /* First byte encodes the length*/
@@ -305,10 +261,10 @@ ps_fetch_date(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_le
 	DBG_ENTER("ps_fetch_date");
 
 	if ((length = php_mysqlnd_net_field_length(row))) {
-		zend_uchar *to= *row;
+		const zend_uchar * to = *row;
 
-		t.time_type= MYSQLND_TIMESTAMP_DATE;
-		t.neg= 0;
+		t.time_type = MYSQLND_TIMESTAMP_DATE;
+		t.neg = 0;
 
 		t.second_part = t.hour = t.minute = t.second = 0;
 
@@ -334,7 +290,7 @@ ps_fetch_date(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_le
 
 /* {{{ ps_fetch_datetime */
 static void
-ps_fetch_datetime(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_datetime(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	struct st_mysqlnd_time t;
 	zend_ulong length; /* First byte encodes the length*/
@@ -342,10 +298,10 @@ ps_fetch_datetime(zval * zv, const MYSQLND_FIELD * const field, unsigned int pac
 	DBG_ENTER("ps_fetch_datetime");
 
 	if ((length = php_mysqlnd_net_field_length(row))) {
-		zend_uchar * to = *row;
+		const zend_uchar * to = *row;
 
 		t.time_type = MYSQLND_TIMESTAMP_DATETIME;
-		t.neg	 = 0;
+		t.neg = 0;
 
 		t.year	 = (unsigned int) sint2korr(to);
 		t.month = (unsigned int) to[2];
@@ -378,7 +334,7 @@ ps_fetch_datetime(zval * zv, const MYSQLND_FIELD * const field, unsigned int pac
 
 /* {{{ ps_fetch_string */
 static void
-ps_fetch_string(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_string(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
 	/*
 	  For now just copy, before we make it possible
@@ -398,9 +354,9 @@ ps_fetch_string(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_
 
 /* {{{ ps_fetch_bit */
 static void
-ps_fetch_bit(zval * zv, const MYSQLND_FIELD * const field, unsigned int pack_len, zend_uchar ** row)
+ps_fetch_bit(zval * zv, const MYSQLND_FIELD * const field, const unsigned int pack_len, const zend_uchar ** row)
 {
-	zend_ulong length = php_mysqlnd_net_field_length(row);
+	const zend_ulong length = php_mysqlnd_net_field_length(row);
 	ps_fetch_from_1_to_8_bytes(zv, field, pack_len, row, length);
 }
 /* }}} */
@@ -479,6 +435,12 @@ void _mysqlnd_init_ps_fetch_subsystem()
 	mysqlnd_ps_fetch_functions[MYSQL_TYPE_TIMESTAMP].pack_len= MYSQLND_PS_SKIP_RESULT_W_LEN;
 	mysqlnd_ps_fetch_functions[MYSQL_TYPE_TIMESTAMP].php_type= IS_STRING;
 	mysqlnd_ps_fetch_functions[MYSQL_TYPE_TIMESTAMP].can_ret_as_str_in_uni	= TRUE;
+
+	mysqlnd_ps_fetch_functions[MYSQL_TYPE_JSON].func	= ps_fetch_string;
+	mysqlnd_ps_fetch_functions[MYSQL_TYPE_JSON].pack_len= MYSQLND_PS_SKIP_RESULT_STR;
+	mysqlnd_ps_fetch_functions[MYSQL_TYPE_JSON].php_type = IS_STRING;
+	mysqlnd_ps_fetch_functions[MYSQL_TYPE_JSON].is_possibly_blob = TRUE;
+	mysqlnd_ps_fetch_functions[MYSQL_TYPE_JSON].can_ret_as_str_in_uni	= TRUE;
 
 	mysqlnd_ps_fetch_functions[MYSQL_TYPE_TINY_BLOB].func	= ps_fetch_string;
 	mysqlnd_ps_fetch_functions[MYSQL_TYPE_TINY_BLOB].pack_len= MYSQLND_PS_SKIP_RESULT_STR;
@@ -588,7 +550,7 @@ mysqlnd_stmt_execute_check_n_enlarge_buffer(zend_uchar **buf, zend_uchar **p, si
 	size_t left = (*buf_len - (*p - *buf));
 
 	if (left < (needed_bytes + overalloc)) {
-		size_t offset = *p - *buf;
+		const size_t offset = *p - *buf;
 		zend_uchar *tmp_buf;
 		*buf_len = offset + needed_bytes + overalloc;
 		tmp_buf = mnd_emalloc(*buf_len);
@@ -615,7 +577,7 @@ mysqlnd_stmt_execute_prepare_param_types(MYSQLND_STMT_DATA * stmt, zval ** copie
 	unsigned int i;
 	DBG_ENTER("mysqlnd_stmt_execute_prepare_param_types");
 	for (i = 0; i < stmt->param_count; i++) {
-		short current_type = stmt->param_bind[i].type;
+		const short current_type = stmt->param_bind[i].type;
 		zval *parameter = &stmt->param_bind[i].zv;
 
 		ZVAL_DEREF(parameter);
@@ -624,7 +586,7 @@ mysqlnd_stmt_execute_prepare_param_types(MYSQLND_STMT_DATA * stmt, zval ** copie
 			if (Z_TYPE_P(parameter) != IS_LONG &&
 				PASS != mysqlnd_stmt_copy_it(copies_param, parameter, stmt->param_count, i))
 			{
-				SET_OOM_ERROR(*stmt->error_info);
+				SET_OOM_ERROR(stmt->error_info);
 				goto end;
 			}
 			/*
@@ -635,7 +597,7 @@ mysqlnd_stmt_execute_prepare_param_types(MYSQLND_STMT_DATA * stmt, zval ** copie
 				zval *tmp_data = (*copies_param && !Z_ISUNDEF((*copies_param)[i]))? &(*copies_param)[i]: parameter;
 				/*
 				  Because converting to double and back to long can lead
-				  to losing precision we need second variable. Conversion to double is to see if 
+				  to losing precision we need second variable. Conversion to double is to see if
 				  value is too big for a long. As said, precision could be lost.
 				*/
 				zval tmp_data_copy;
@@ -674,7 +636,7 @@ mysqlnd_stmt_execute_store_types(MYSQLND_STMT_DATA * stmt, zval * copies, zend_u
 		short current_type = stmt->param_bind[i].type;
 		zval *parameter = &stmt->param_bind[i].zv;
 		/* our types are not unsigned */
-#if SIZEOF_ZEND_LONG==8  
+#if SIZEOF_ZEND_LONG==8
 		if (current_type == MYSQL_TYPE_LONG) {
 			current_type = MYSQL_TYPE_LONGLONG;
 		}
@@ -732,7 +694,7 @@ mysqlnd_stmt_execute_calculate_param_values_size(MYSQLND_STMT_DATA * stmt, zval 
 					/* Double binding of the same zval, make a copy */
 					if (!*copies_param || Z_ISUNDEF((*copies_param)[i])) {
 						if (PASS != mysqlnd_stmt_copy_it(copies_param, the_var, stmt->param_count, i)) {
-							SET_OOM_ERROR(*stmt->error_info);
+							SET_OOM_ERROR(stmt->error_info);
 							goto end;
 						}
 					}
@@ -747,7 +709,7 @@ mysqlnd_stmt_execute_calculate_param_values_size(MYSQLND_STMT_DATA * stmt, zval 
 				if (Z_TYPE_P(the_var) != IS_DOUBLE) {
 					if (!*copies_param || Z_ISUNDEF((*copies_param)[i])) {
 						if (PASS != mysqlnd_stmt_copy_it(copies_param, the_var, stmt->param_count, i)) {
-							SET_OOM_ERROR(*stmt->error_info);
+							SET_OOM_ERROR(stmt->error_info);
 							goto end;
 						}
 					}
@@ -782,7 +744,7 @@ use_string:
 				if (Z_TYPE_P(the_var) != IS_STRING) {
 					if (!*copies_param || Z_ISUNDEF((*copies_param)[i])) {
 						if (PASS != mysqlnd_stmt_copy_it(copies_param, the_var, stmt->param_count, i)) {
-							SET_OOM_ERROR(*stmt->error_info);
+							SET_OOM_ERROR(stmt->error_info);
 							goto end;
 						}
 					}
@@ -847,7 +809,7 @@ mysqlnd_stmt_execute_store_param_values(MYSQLND_STMT_DATA * stmt, zval * copies,
 				case MYSQL_TYPE_VAR_STRING:
 send_string:
 					{
-						size_t len = Z_STRLEN_P(data);
+						const size_t len = Z_STRLEN_P(data);
 						/* to is after p. The latter hasn't been moved */
 						*p = php_mysqlnd_net_store_length(*p, len);
 						memcpy(*p, Z_STRVAL_P(data), len);
@@ -882,7 +844,7 @@ mysqlnd_stmt_execute_store_params(MYSQLND_STMT * s, zend_uchar **buf, zend_uchar
 	{
 		unsigned int null_count = (stmt->param_count + 7) / 8;
 		if (FAIL == mysqlnd_stmt_execute_check_n_enlarge_buffer(buf, p, buf_len, provided_buffer, null_count)) {
-			SET_OOM_ERROR(*stmt->error_info);
+			SET_OOM_ERROR(stmt->error_info);
 			goto end;
 		}
 		/* put `null` bytes */
@@ -908,7 +870,7 @@ mysqlnd_stmt_execute_store_params(MYSQLND_STMT * s, zend_uchar **buf, zend_uchar
 
 	if (stmt->send_types_to_server) {
 		if (FAIL == mysqlnd_stmt_execute_check_n_enlarge_buffer(buf, p, buf_len, provided_buffer, stmt->param_count * 2)) {
-			SET_OOM_ERROR(*stmt->error_info);
+			SET_OOM_ERROR(stmt->error_info);
 			goto end;
 		}
 		mysqlnd_stmt_execute_store_types(stmt, copies, p);
@@ -924,7 +886,7 @@ mysqlnd_stmt_execute_store_params(MYSQLND_STMT * s, zend_uchar **buf, zend_uchar
 
 	/* 2.2 Enlarge the buffer, if needed */
 	if (FAIL == mysqlnd_stmt_execute_check_n_enlarge_buffer(buf, p, buf_len, provided_buffer, data_size)) {
-		SET_OOM_ERROR(*stmt->error_info);
+		SET_OOM_ERROR(stmt->error_info);
 		goto end;
 	}
 
@@ -961,7 +923,7 @@ mysqlnd_stmt_execute_generate_request(MYSQLND_STMT * const s, zend_uchar ** requ
 	p++;
 
 	/* Make it all zero */
-	int4store(p, 0); 
+	int4store(p, 0);
 
 	int1store(p, 1); /* and send 1 for iteration count */
 	p+= 4;

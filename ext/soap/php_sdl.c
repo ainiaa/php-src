@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -112,7 +112,7 @@ encodePtr get_encoder(sdlPtr sdl, const char *ns, const char *type)
 {
 	encodePtr enc = NULL;
 	char *nscat;
-	int ns_len = strlen(ns);
+	int ns_len = ns ? strlen(ns) : 0;
 	int type_len = strlen(type);
 	int len = ns_len + type_len + 1;
 
@@ -177,7 +177,7 @@ encodePtr get_encoder_ex(sdlPtr sdl, const char *nscat, int len)
 	return NULL;
 }
 
-sdlBindingPtr get_binding_from_type(sdlPtr sdl, int type)
+sdlBindingPtr get_binding_from_type(sdlPtr sdl, sdlBindingType type)
 {
 	sdlBindingPtr binding;
 
@@ -227,7 +227,7 @@ static int is_wsdl_element(xmlNodePtr node)
 void sdl_set_uri_credentials(sdlCtx *ctx, char *uri)
 {
 	char *s;
-	int l1, l2;
+	size_t l1, l2;
 	zval context;
 	zval *header = NULL;
 
@@ -235,11 +235,11 @@ void sdl_set_uri_credentials(sdlCtx *ctx, char *uri)
 	s = strstr(ctx->sdl->source, "://");
 	if (!s) return;
 	s = strchr(s+3, '/');
-	l1 = s ? (s - ctx->sdl->source) : strlen(ctx->sdl->source);
+	l1 = s ? (size_t)(s - ctx->sdl->source) : strlen(ctx->sdl->source);
 	s = strstr((char*)uri, "://");
 	if (!s) return;
 	s = strchr(s+3, '/');
-	l2 = s ? (s - (char*)uri) : strlen((char*)uri);
+	l2 = s ? (size_t)(s - (char*)uri) : strlen((char*)uri);
 	if (l1 != l2) {
 		/* check for http://...:80/ */
 		if (l1 > 11 &&
@@ -289,14 +289,14 @@ void sdl_set_uri_credentials(sdlCtx *ctx, char *uri)
 					char *rest = strstr(s, "\r\n");
 					if (rest) {
 						zval new_header;
-				    	
+
 						rest += 2;
 						ZVAL_NEW_STR(&new_header, zend_string_alloc(Z_STRLEN_P(header) - (rest - s), 0));
 						memcpy(Z_STRVAL(new_header), Z_STRVAL_P(header), s - Z_STRVAL_P(header));
 						memcpy(Z_STRVAL(new_header) + (s - Z_STRVAL_P(header)), rest, Z_STRLEN_P(header) - (rest - Z_STRVAL_P(header)) + 1);
 						ZVAL_COPY(&ctx->old_header, header);
 						php_stream_context_set_option(ctx->context, "http", "header", &new_header);
-						zval_dtor(&new_header);
+						zval_ptr_dtor(&new_header);
 					}
 				}
 			}
@@ -324,11 +324,11 @@ static void load_wsdl_ex(zval *this_ptr, char *struri, sdlCtx *ctx, int include)
 	if (zend_hash_str_exists(&ctx->docs, struri, strlen(struri))) {
 		return;
 	}
-	
+
 	sdl_set_uri_credentials(ctx, struri);
 	wsdl = soap_xmlParseFile(struri);
 	sdl_restore_uri_credentials(ctx);
-	
+
 	if (!wsdl) {
 		xmlErrorPtr xmlErrorPtr = xmlGetLastError();
 
@@ -1149,7 +1149,9 @@ static sdlPtr load_wsdl(zval *this_ptr, char *struri)
 					zend_hash_init(ctx.sdl->bindings, 0, NULL, delete_binding, 0);
 				}
 
-				zend_hash_str_add_ptr(ctx.sdl->bindings, tmpbinding->name, strlen(tmpbinding->name), tmpbinding);
+				if (!zend_hash_str_add_ptr(ctx.sdl->bindings, tmpbinding->name, strlen(tmpbinding->name), tmpbinding)) {
+					zend_hash_next_index_insert_ptr(ctx.sdl->bindings, tmpbinding);
+				}
 				trav= trav->next;
 			}
 
@@ -1172,7 +1174,7 @@ static sdlPtr load_wsdl(zval *this_ptr, char *struri)
 	return ctx.sdl;
 }
 
-#define WSDL_CACHE_VERSION 0x0e
+#define WSDL_CACHE_VERSION 0x0f
 
 #define WSDL_CACHE_GET(ret,type,buf)   memcpy(&ret,*buf,sizeof(type)); *buf += sizeof(type);
 #define WSDL_CACHE_GET_INT(ret,buf)    ret = ((unsigned char)(*buf)[0])|((unsigned char)(*buf)[1]<<8)|((unsigned char)(*buf)[2]<<16)|((int)(*buf)[3]<<24); *buf += 4;
@@ -1437,7 +1439,7 @@ static void sdl_deserialize_encoder(encodePtr enc, sdlTypePtr *types, char **in)
 				enc->to_xml = real_enc->to_xml;
 			}
 		}
-	}	
+	}
 }
 
 static void sdl_deserialize_soap_body(sdlSoapBindingFunctionBodyPtr body, encodePtr *encoders, sdlTypePtr *types, char **in)
@@ -1793,8 +1795,8 @@ static void sdl_serialize_string(const char *str, smart_str *out)
 static void sdl_serialize_key(zend_string *key, smart_str *out)
 {
 	if (key) {
-		WSDL_CACHE_PUT_INT(key->len, out);
-		WSDL_CACHE_PUT_N(key->val, key->len, out);
+		WSDL_CACHE_PUT_INT(ZSTR_LEN(key), out);
+		WSDL_CACHE_PUT_N(ZSTR_VAL(key), ZSTR_LEN(key), out);
 	} else {
 		WSDL_CACHE_PUT_INT(0, out);
 	}
@@ -2362,7 +2364,7 @@ static void add_sdl_to_cache(const char *fn, const char *uri, time_t t, sdlPtr s
 		} ZEND_HASH_FOREACH_END();
 	}
 
-	php_ignore_value(write(f, buf.s->val, buf.s->len));
+	php_ignore_value(write(f, ZSTR_VAL(buf.s), ZSTR_LEN(buf.s)));
 	close(f);
 	smart_str_free(&buf);
 	zend_hash_destroy(&tmp_functions);
@@ -2472,7 +2474,7 @@ static HashTable* make_persistent_sdl_function_headers(HashTable *headers, HashT
 
 		if (key) {
 			/* We have to duplicate key emalloc->malloc */
-			zend_hash_str_add_ptr(pheaders, key->val, key->len, pheader);
+			zend_hash_str_add_ptr(pheaders, ZSTR_VAL(key), ZSTR_LEN(key), pheader);
 		} else {
 			zend_hash_next_index_insert_ptr(pheaders, pheader);
 		}
@@ -2529,7 +2531,7 @@ static HashTable* make_persistent_sdl_parameters(HashTable *params, HashTable *p
 
 		if (key) {
 			/* We have to duplicate key emalloc->malloc */
-			zend_hash_str_add_ptr(pparams, key->val, key->len, pparam);
+			zend_hash_str_add_ptr(pparams, ZSTR_VAL(key), ZSTR_LEN(key), pparam);
 		} else {
 			zend_hash_next_index_insert_ptr(pparams, pparam);
 		}
@@ -2573,7 +2575,7 @@ static HashTable* make_persistent_sdl_function_faults(sdlFunctionPtr func, HashT
 
 		if (key) {
 			/* We have to duplicate key emalloc->malloc */
-			zend_hash_str_add_ptr(pfaults, key->val, key->len, pfault);
+			zend_hash_str_add_ptr(pfaults, ZSTR_VAL(key), ZSTR_LEN(key), pfault);
 		} else {
 			zend_hash_next_index_insert_ptr(pfaults, pfault);
 		}
@@ -2621,7 +2623,7 @@ static sdlAttributePtr make_persistent_sdl_attribute(sdlAttributePtr attr, HashT
 		pattr->extraAttributes = malloc(sizeof(HashTable));
 		zend_hash_init(pattr->extraAttributes, zend_hash_num_elements(attr->extraAttributes), NULL, delete_extra_attribute_persistent, 1);
 
-		ZEND_HASH_FOREACH_STR_KEY_PTR(pattr->extraAttributes, key, tmp) {
+		ZEND_HASH_FOREACH_STR_KEY_PTR(attr->extraAttributes, key, tmp) {
 			if (key) {
 				pextra = malloc(sizeof(sdlExtraAttribute));
 				memset(pextra, 0, sizeof(sdlExtraAttribute));
@@ -2632,9 +2634,9 @@ static sdlAttributePtr make_persistent_sdl_attribute(sdlAttributePtr attr, HashT
 				if (tmp->val) {
 					pextra->val = strdup(tmp->val);
 				}
-			
+
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(pattr->extraAttributes, key->val, key->len, pextra);
+				zend_hash_str_add_ptr(pattr->extraAttributes, ZSTR_VAL(key), ZSTR_LEN(key), pextra);
 			}
 		} ZEND_HASH_FOREACH_END();
 	}
@@ -2778,7 +2780,7 @@ static sdlTypePtr make_persistent_sdl_type(sdlTypePtr type, HashTable *ptr_map, 
 			pelem = make_persistent_sdl_type(tmp, ptr_map, bp_types, bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(ptype->elements, key->val, key->len, pelem);
+				zend_hash_str_add_ptr(ptype->elements, ZSTR_VAL(key), ZSTR_LEN(key), pelem);
 			} else {
 				zend_hash_next_index_insert_ptr(ptype->elements, pelem);
 			}
@@ -2796,7 +2798,7 @@ static sdlTypePtr make_persistent_sdl_type(sdlTypePtr type, HashTable *ptr_map, 
 			pattr = make_persistent_sdl_attribute(tmp, ptr_map, bp_types, bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(ptype->attributes, key->val, key->len, pattr);
+				zend_hash_str_add_ptr(ptype->attributes, ZSTR_VAL(key), ZSTR_LEN(key), pattr);
 			} else {
 				zend_hash_next_index_insert_ptr(ptype->attributes, pattr);
 			}
@@ -2851,7 +2853,7 @@ static sdlBindingPtr make_persistent_sdl_binding(sdlBindingPtr bind, HashTable *
 
 	if (pbind->bindingType == BINDING_SOAP && pbind->bindingAttributes) {
 		sdlSoapBindingPtr soap_binding;
-	   
+
 		soap_binding = malloc(sizeof(sdlSoapBinding));
 		memset(soap_binding, 0, sizeof(sdlSoapBinding));
 		*soap_binding = *(sdlSoapBindingPtr)pbind->bindingAttributes;
@@ -2887,7 +2889,7 @@ static sdlFunctionPtr make_persistent_sdl_function(sdlFunctionPtr func, HashTabl
 			assert(0);
 		}
 		pfunc->binding = tmp;
-		
+
 		if (pfunc->binding->bindingType == BINDING_SOAP && pfunc->bindingAttributes) {
 			sdlSoapBindingFunctionPtr soap_binding;
 
@@ -2948,7 +2950,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			ptype = make_persistent_sdl_type(tmp, &ptr_map, &bp_types, &bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->groups, key->val, key->len, ptype);
+				zend_hash_str_add_ptr(psdl->groups, ZSTR_VAL(key), ZSTR_LEN(key), ptype);
 			} else {
 				zend_hash_next_index_insert_ptr(psdl->groups, ptype);
 			}
@@ -2967,7 +2969,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			ptype = make_persistent_sdl_type(tmp, &ptr_map, &bp_types, &bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->types, key->val, key->len, ptype);
+				zend_hash_str_add_ptr(psdl->types, ZSTR_VAL(key), ZSTR_LEN(key), ptype);
 			} else {
 				zend_hash_next_index_insert_ptr(psdl->types, ptype);
 			}
@@ -2986,7 +2988,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			ptype = make_persistent_sdl_type(tmp, &ptr_map, &bp_types, &bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->elements, key->val, key->len, ptype);
+				zend_hash_str_add_ptr(psdl->elements, ZSTR_VAL(key), ZSTR_LEN(key), ptype);
 			} else {
 				zend_hash_next_index_insert_ptr(psdl->elements, ptype);
 			}
@@ -3005,7 +3007,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			penc = make_persistent_sdl_encoder(tmp, &ptr_map, &bp_types, &bp_encoders);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->encoders, key->val, key->len, penc);
+				zend_hash_str_add_ptr(psdl->encoders, ZSTR_VAL(key), ZSTR_LEN(key), penc);
 			} else {
 				zend_hash_next_index_insert_ptr(psdl->encoders, penc);
 			}
@@ -3047,7 +3049,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			pbind = make_persistent_sdl_binding(tmp, &ptr_map);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->bindings, key->val, key->len, pbind);
+				zend_hash_str_add_ptr(psdl->bindings, ZSTR_VAL(key), ZSTR_LEN(key), pbind);
 			} else {
 				zend_hash_next_index_insert_ptr(psdl->bindings, pbind);
 			}
@@ -3064,7 +3066,7 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			pfunc = make_persistent_sdl_function(tmp, &ptr_map);
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(&psdl->functions, key->val, key->len, pfunc);
+				zend_hash_str_add_ptr(&psdl->functions, ZSTR_VAL(key), ZSTR_LEN(key), pfunc);
 			} else {
 				zend_hash_next_index_insert_ptr(&psdl->functions, pfunc);
 			}
@@ -3085,11 +3087,10 @@ static sdlPtr make_persistent_sdl(sdlPtr sdl)
 			if ((preq = zend_hash_str_find_ptr(&ptr_map, (char*)&tmp, sizeof(tmp))) == NULL) {
 				assert(0);
 			}
-			//???
 			Z_PTR_P(zv) = preq;
 			if (key) {
 				/* We have to duplicate key emalloc->malloc */
-				zend_hash_str_add_ptr(psdl->requests, key->val, key->len, preq);
+				zend_hash_str_add_ptr(psdl->requests, ZSTR_VAL(key), ZSTR_LEN(key), preq);
 			}
 		} ZEND_HASH_FOREACH_END();
 	}
@@ -3155,7 +3156,7 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 	char  fn[MAXPATHLEN];
 	sdlPtr sdl = NULL;
 	char* old_error_code = SOAP_GLOBAL(error_code);
-	int uri_len = 0;
+	size_t uri_len = 0;
 	php_stream_context *context=NULL;
 	zval *tmp, *proxy_host, *proxy_port, orig_context, new_context;
 	smart_str headers = {0};
@@ -3203,7 +3204,7 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 		PHP_MD5Update(&context, (unsigned char*)uri, uri_len);
 		PHP_MD5Final(digest, &context);
 		make_digest(md5str, digest);
-		key = emalloc(len+sizeof("/wsdl-")-1+user_len+sizeof(md5str));
+		key = emalloc(len+sizeof("/wsdl-")-1+user_len+2+sizeof(md5str));
 		memcpy(key,SOAP_GLOBAL(cache_dir),len);
 		memcpy(key+len,"/wsdl-",sizeof("/wsdl-")-1);
 		len += sizeof("/wsdl-")-1;
@@ -3211,6 +3212,16 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 			memcpy(key+len, user, user_len-1);
 			len += user_len-1;
 			key[len++] = '-';
+		}
+		if (WSDL_CACHE_VERSION <= 0x9f) {
+			key[len++] = (WSDL_CACHE_VERSION >> 8) + '0';
+		} else {
+			key[len++] = (WSDL_CACHE_VERSION >> 8) - 10 + 'a';
+		}
+		if ((WSDL_CACHE_VERSION & 0xf) <= 0x9) {
+			key[len++] = (WSDL_CACHE_VERSION & 0xf) + '0';
+		} else {
+			key[len++] = (WSDL_CACHE_VERSION & 0xf) - 10 + 'a';
 		}
 		memcpy(key+len,md5str,sizeof(md5str));
 
@@ -3229,7 +3240,7 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 	}
 
 	if ((tmp = zend_hash_str_find(Z_OBJPROP_P(this_ptr), "_user_agent", sizeof("_user_agent")-1)) != NULL &&
-	    Z_TYPE_P(tmp) == IS_STRING && Z_STRLEN_P(tmp) > 0) {	
+	    Z_TYPE_P(tmp) == IS_STRING && Z_STRLEN_P(tmp) > 0) {
 		smart_str_appends(&headers, "User-Agent: ");
 		smart_str_appends(&headers, Z_STRVAL_P(tmp));
 		smart_str_appends(&headers, "\r\n");
@@ -3250,7 +3261,7 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 		smart_str_0(&proxy);
 		zval_dtor(&str_port);
 		ZVAL_NEW_STR(&str_proxy, proxy.s);
-		
+
 		if (!context) {
 			context = php_stream_context_alloc();
 		}
@@ -3277,7 +3288,7 @@ sdlPtr get_sdl(zval *this_ptr, char *uri, zend_long cache_wsdl)
 		smart_str_appendl(&headers, "Connection: close\r\n", sizeof("Connection: close\r\n")-1);
 	}
 
-	if (headers.s && headers.s->len > 0) {
+	if (headers.s && ZSTR_LEN(headers.s) > 0) {
 		zval str_headers;
 
 		if (!context) {
@@ -3328,7 +3339,7 @@ cache_in_memory:
 				SOAP_GLOBAL(mem_cache) = malloc(sizeof(HashTable));
 				zend_hash_init(SOAP_GLOBAL(mem_cache), 0, NULL, delete_psdl, 1);
 			} else if (SOAP_GLOBAL(cache_limit) > 0 &&
-			           SOAP_GLOBAL(cache_limit) <= zend_hash_num_elements(SOAP_GLOBAL(mem_cache))) {
+			           SOAP_GLOBAL(cache_limit) <= (zend_long)zend_hash_num_elements(SOAP_GLOBAL(mem_cache))) {
 				/* in-memory cache overflow */
 				sdl_cache_bucket *q;
 				time_t latest = t;

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -71,7 +71,7 @@ inline ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 #define LONG_CHECK_VALID_INT(l) \
 	do { \
 		if ((l) < INT_MIN && (l) > INT_MAX) { \
-			php_error_docref0(NULL, E_WARNING, "The value %pd does not fit inside " \
+			php_error_docref0(NULL, E_WARNING, "The value " ZEND_LONG_FMT " does not fit inside " \
 					"the boundaries of a native integer", (l)); \
 			return; \
 		} \
@@ -181,8 +181,10 @@ PHP_FUNCTION(socket_sendmsg)
 
 	LONG_CHECK_VALID_INT(flags);
 
-	ZEND_FETCH_RESOURCE(php_sock, php_socket *, zsocket, -1,
-			php_sockets_le_socket_name, php_sockets_le_socket());
+	if ((php_sock = (php_socket *)zend_fetch_resource(Z_RES_P(zsocket),
+					php_sockets_le_socket_name, php_sockets_le_socket())) == NULL) {
+		RETURN_FALSE;
+	}
 
 	msghdr = from_zval_run_conversions(zmsg, php_sock, from_zval_write_msghdr_send,
 			sizeof(*msghdr), "msghdr", &allocations, &err);
@@ -224,8 +226,10 @@ PHP_FUNCTION(socket_recvmsg)
 
 	LONG_CHECK_VALID_INT(flags);
 
-	ZEND_FETCH_RESOURCE(php_sock, php_socket *, zsocket, -1,
-			php_sockets_le_socket_name, php_sockets_le_socket());
+	if ((php_sock = (php_socket *)zend_fetch_resource(Z_RES_P(zsocket),
+					php_sockets_le_socket_name, php_sockets_le_socket())) == NULL) {
+		RETURN_FALSE;
+	}
 
 	msghdr = from_zval_run_conversions(zmsg, php_sock, from_zval_write_msghdr_recv,
 			sizeof(*msghdr), "msghdr", &allocations, &err);
@@ -295,16 +299,16 @@ PHP_FUNCTION(socket_cmsg_space)
 
 	entry = get_ancillary_reg_entry(level, type);
 	if (entry == NULL) {
-		php_error_docref0(NULL, E_WARNING, "The pair level %pd/type %pd is "
+		php_error_docref0(NULL, E_WARNING, "The pair level " ZEND_LONG_FMT "/type " ZEND_LONG_FMT " is "
 				"not supported by PHP", level, type);
 		return;
 	}
 
-	if (entry->var_el_size > 0 && n > (ZEND_LONG_MAX - (zend_long)entry->size -
-			(zend_long)CMSG_SPACE(0) - 15L) / entry->var_el_size) {
+	if (entry->var_el_size > 0 && n > (zend_long)((ZEND_LONG_MAX - entry->size -
+			CMSG_SPACE(0) - 15L) / entry->var_el_size)) {
 		/* the -15 is to account for any padding CMSG_SPACE may add after the data */
 		php_error_docref0(NULL, E_WARNING, "The value for the "
-				"third argument (%pd) is too large", n);
+				"third argument (" ZEND_LONG_FMT ") is too large", n);
 		return;
 	}
 

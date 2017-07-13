@@ -2,10 +2,10 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        | 
+   | that is bundled with this package in the file LICENSE, and is        |
    | available through the world-wide-web at the following url:           |
    | http://www.zend.com/license/2_00.txt.                                |
    | If you did not receive a copy of the Zend license and are unable to  |
@@ -25,6 +25,7 @@
 #include "zend_highlight.h"
 #include "zend_ptr_stack.h"
 #include "zend_globals.h"
+#include "zend_exceptions.h"
 
 ZEND_API void zend_html_putc(char c)
 {
@@ -168,6 +169,9 @@ ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini
 	}
 	zend_printf("</span>\n");
 	zend_printf("</code>");
+
+	/* Discard parse errors thrown during tokenization */
+	zend_clear_exception();
 }
 
 ZEND_API void zend_strip(void)
@@ -189,7 +193,7 @@ ZEND_API void zend_strip(void)
 			case T_DOC_COMMENT:
 				ZVAL_UNDEF(&token);
 				continue;
-			
+
 			case T_END_HEREDOC:
 				zend_write((char*)LANG_SCNG(yy_text), LANG_SCNG(yy_leng));
 				/* read the following character, either newline or ; */
@@ -224,6 +228,9 @@ ZEND_API void zend_strip(void)
 		prev_space = 0;
 		ZVAL_UNDEF(&token);
 	}
+
+	/* Discard parse errors thrown during tokenization */
+	zend_clear_exception();
 }
 
 /*
@@ -232,5 +239,7 @@ ZEND_API void zend_strip(void)
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */
 

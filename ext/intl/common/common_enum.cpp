@@ -36,12 +36,12 @@ zend_object_handlers IntlIterator_handlers;
 void zoi_with_current_dtor(zend_object_iterator *iter)
 {
 	zoi_with_current *zoiwc = (zoi_with_current*)iter;
-	
+
 	if (!Z_ISUNDEF(zoiwc->wrapping_obj)) {
 		/* we have to copy the pointer because zoiwc->wrapping_obj may be
 		 * changed midway the execution of zval_ptr_dtor() */
 		zval *zwo = &zoiwc->wrapping_obj;
-		
+
 		/* object is still here, we can rely on it to call this again and
 		 * destroy this object */
 		zval_ptr_dtor(zwo);
@@ -183,7 +183,7 @@ static zend_object_iterator *IntlIterator_get_iterator(
 		return NULL;
 	}
 
-	++GC_REFCOUNT(ii->iterator);
+	++GC_REFCOUNT(&ii->iterator->std);
 
 	return ii->iterator;
 }
@@ -193,7 +193,7 @@ static zend_object *IntlIterator_object_create(zend_class_entry *ce)
 	IntlIterator_object	*intern;
 
 	intern = (IntlIterator_object*)ecalloc(1, sizeof(IntlIterator_object) + sizeof(zval) * (ce->default_properties_count - 1));
-	
+
 	zend_object_std_init(&intern->zo, ce);
     object_properties_init(&intern->zo, ce);
 	intl_error_init(INTLITERATOR_ERROR_P(intern));
@@ -219,7 +219,8 @@ static PHP_METHOD(IntlIterator, current)
 	INTLITERATOR_METHOD_FETCH_OBJECT;
 	data = ii->iterator->funcs->get_current_data(ii->iterator);
 	if (data) {
-		RETURN_ZVAL(data, 1, 0);
+		ZVAL_DEREF(data);
+		ZVAL_COPY(return_value, data);
 	}
 }
 

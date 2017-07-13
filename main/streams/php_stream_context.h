@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2014 The PHP Group                                |
+   | Copyright (c) 1997-2017 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -33,7 +33,7 @@ typedef void (*php_stream_notification_func)(php_stream_context *context,
    If no context was passed, use the default context
    The default context has not yet been created, do it now. */
 #define php_stream_context_from_zval(zcontext, nocontext) ( \
-		(zcontext) ? zend_fetch_resource(zcontext, -1, "Stream-Context", NULL, 1, php_le_stream_context()) : \
+		(zcontext) ? zend_fetch_resource_ex(zcontext, "Stream-Context", php_le_stream_context()) : \
 		(nocontext) ? NULL : \
 		FG(default_context) ? FG(default_context) : \
 		(FG(default_context) = php_stream_context_alloc()) )
@@ -93,7 +93,7 @@ END_EXTERN_C()
 #define php_stream_notify_info(context, code, xmsg, xcode)	do { if ((context) && (context)->notifier) { \
 	php_stream_notification_notify((context), (code), PHP_STREAM_NOTIFY_SEVERITY_INFO, \
 				(xmsg), (xcode), 0, 0, NULL); } } while (0)
-			
+
 #define php_stream_notify_progress(context, bsofar, bmax) do { if ((context) && (context)->notifier) { \
 	php_stream_notification_notify((context), PHP_STREAM_NOTIFY_PROGRESS, PHP_STREAM_NOTIFY_SEVERITY_INFO, \
 			NULL, 0, (bsofar), (bmax), NULL); } } while(0)
@@ -112,11 +112,11 @@ END_EXTERN_C()
 #define php_stream_notify_file_size(context, file_size, xmsg, xcode) do { if ((context) && (context)->notifier) { \
 	php_stream_notification_notify((context), PHP_STREAM_NOTIFY_FILE_SIZE_IS, PHP_STREAM_NOTIFY_SEVERITY_INFO, \
 			(xmsg), (xcode), 0, (file_size), NULL); } } while(0)
-	
+
 #define php_stream_notify_error(context, code, xmsg, xcode) do { if ((context) && (context)->notifier) {\
 	php_stream_notification_notify((context), (code), PHP_STREAM_NOTIFY_SEVERITY_ERR, \
 			(xmsg), (xcode), 0, 0, NULL); } } while(0)
-	
+
 
 /*
  * Local variables:

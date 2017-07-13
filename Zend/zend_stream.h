@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -34,7 +34,7 @@ typedef size_t (*zend_stream_fsizer_t)(void* handle);
 typedef size_t (*zend_stream_reader_t)(void* handle, char *buf, size_t len);
 typedef void   (*zend_stream_closer_t)(void* handle);
 
-#define ZEND_MMAP_AHEAD 32 
+#define ZEND_MMAP_AHEAD 32
 
 typedef enum {
 	ZEND_HANDLE_FILENAME,
@@ -69,7 +69,7 @@ typedef struct _zend_file_handle {
 		zend_stream   stream;
 	} handle;
 	const char        *filename;
-	char              *opened_path;
+	zend_string       *opened_path;
 	zend_stream_type  type;
 	zend_bool free_filename;
 } zend_file_handle;
@@ -98,3 +98,13 @@ typedef struct stat zend_stat_t;
 #endif
 
 #endif
+
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

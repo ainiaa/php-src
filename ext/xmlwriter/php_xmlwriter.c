@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
+  | Copyright (c) 1997-2017 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -90,7 +90,7 @@ typedef int (*xmlwriter_read_one_char_t)(xmlTextWriterPtr writer, const xmlChar 
 typedef int (*xmlwriter_read_int_t)(xmlTextWriterPtr writer);
 
 /* {{{ xmlwriter_object_free_storage */
-static void xmlwriter_free_resource_ptr(xmlwriter_object *intern) 
+static void xmlwriter_free_resource_ptr(xmlwriter_object *intern)
 {
 	if (intern) {
 		if (intern->ptr) {
@@ -112,7 +112,7 @@ static void xmlwriter_free_resource_ptr(xmlwriter_object *intern)
 		ze_xmlwriter_object *obj = Z_XMLWRITER_P(object); \
 		intern = obj->xmlwriter_ptr; \
 		if (!intern) { \
-			php_error_docref(NULL, E_WARNING, "Invalid or unitialized XMLWriter object"); \
+			php_error_docref(NULL, E_WARNING, "Invalid or uninitialized XMLWriter object"); \
 			RETURN_FALSE; \
 		} \
 	}
@@ -141,7 +141,7 @@ static zend_object *xmlwriter_object_new(zend_class_entry *class_type)
 {
 	ze_xmlwriter_object *intern;
 
-	intern = ecalloc(1, sizeof(ze_xmlwriter_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(ze_xmlwriter_object) + zend_object_properties_size(class_type));
 	zend_object_std_init(&intern->std, class_type);
 	object_properties_init(&intern->std, class_type);
 	intern->std.handlers = &xmlwriter_object_handlers;
@@ -155,7 +155,7 @@ static zend_object *xmlwriter_object_new(zend_class_entry *class_type)
 		php_error_docref(NULL, E_WARNING, "%s", __err);	\
 		RETURN_FALSE;	\
 	}	\
-	
+
 /* {{{ arginfo */
 ZEND_BEGIN_ARG_INFO(arginfo_xmlwriter_void, 0)
 ZEND_END_ARG_INFO()
@@ -568,7 +568,7 @@ static const zend_function_entry xmlwriter_class_functions[] = {
 #endif
 	PHP_ME_MAPPING(outputMemory,	xmlwriter_output_memory,	arginfo_xmlwriter_method_output_memory, 0)
 	PHP_ME_MAPPING(flush,			xmlwriter_flush,			arginfo_xmlwriter_method_flush, 0)
-	{NULL, NULL, NULL}
+	PHP_FE_END
 };
 /* }}} */
 
@@ -580,7 +580,7 @@ static PHP_MINFO_FUNCTION(xmlwriter);
 static int le_xmlwriter;
 /* }}} */
 
-/* _xmlwriter_get_valid_file_path should be made a 
+/* _xmlwriter_get_valid_file_path should be made a
 	common function in libxml extension as code is common to a few xml extensions */
 /* {{{ _xmlwriter_get_valid_file_path */
 static char *_xmlwriter_get_valid_file_path(char *source, char *resolved_path, int resolved_path_len ) {
@@ -664,7 +664,7 @@ zend_module_entry xmlwriter_module_entry = {
 	NULL,
 	NULL,
 	PHP_MINFO(xmlwriter),
-	"0.1",
+	PHP_XMLWRITER_VERSION,
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -673,7 +673,7 @@ zend_module_entry xmlwriter_module_entry = {
 ZEND_GET_MODULE(xmlwriter)
 #endif
 
-/* {{{ xmlwriter_objects_clone 
+/* {{{ xmlwriter_objects_clone
 static void xmlwriter_objects_clone(void *object, void **object_clone)
 {
 	TODO
@@ -695,10 +695,11 @@ static void php_xmlwriter_string_arg(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_rea
 	xmlwriter_object *intern;
 	xmlTextWriterPtr ptr;
 	char *name;
-	size_t name_len, retval;
+	size_t name_len;
+	int retval;
 
 	zval *self = getThis();
-	
+
 	if (self) {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &name, &name_len) == FAILURE) {
 			return;
@@ -708,8 +709,10 @@ static void php_xmlwriter_string_arg(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_rea
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs", &pind, &name, &name_len) == FAILURE) {
 			return;
 		}
-	
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	if (err_string != NULL) {
@@ -724,7 +727,7 @@ static void php_xmlwriter_string_arg(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_rea
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 
@@ -735,7 +738,7 @@ static void php_xmlwriter_end(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_read_int_t
 	xmlTextWriterPtr ptr;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
 		XMLWRITER_FROM_OBJECT(intern, self);
 		if (zend_parse_parameters_none() == FAILURE) {
@@ -745,7 +748,9 @@ static void php_xmlwriter_end(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_read_int_t
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "r", &pind) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	ptr = intern->ptr;
@@ -756,7 +761,7 @@ static void php_xmlwriter_end(INTERNAL_FUNCTION_PARAMETERS, xmlwriter_read_int_t
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 
@@ -772,7 +777,7 @@ static PHP_FUNCTION(xmlwriter_set_indent)
 	zend_bool indent;
 
 	zval *self = getThis();
-	
+
 	if (self) {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "b", &indent) == FAILURE) {
 			return;
@@ -782,7 +787,9 @@ static PHP_FUNCTION(xmlwriter_set_indent)
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rb", &pind, &indent) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 
@@ -793,7 +800,7 @@ static PHP_FUNCTION(xmlwriter_set_indent)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -836,19 +843,21 @@ static PHP_FUNCTION(xmlwriter_start_attribute_ns)
 	size_t name_len, prefix_len, uri_len;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "sss!", 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "sss!",
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len) == FAILURE) {
 			return;
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rsss!", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rsss!", &pind,
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Attribute Name");
@@ -861,7 +870,7 @@ static PHP_FUNCTION(xmlwriter_start_attribute_ns)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -878,19 +887,21 @@ static PHP_FUNCTION(xmlwriter_write_attribute)
 	size_t name_len, content_len;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss", 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss",
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind,
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Attribute Name");
@@ -903,7 +914,7 @@ static PHP_FUNCTION(xmlwriter_write_attribute)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -921,19 +932,21 @@ static PHP_FUNCTION(xmlwriter_write_attribute_ns)
 	int retval;
 
 	zval *self = getThis();
-	
+
 	if (self) {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "sss!s", 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "sss!s",
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len, &content, &content_len) == FAILURE) {
 			return;
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rsss!s", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rsss!s", &pind,
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Attribute Name");
@@ -946,7 +959,7 @@ static PHP_FUNCTION(xmlwriter_write_attribute_ns)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -971,7 +984,7 @@ static PHP_FUNCTION(xmlwriter_start_element_ns)
 	size_t name_len, prefix_len, uri_len;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "s!ss!",
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len) == FAILURE) {
@@ -979,11 +992,13 @@ static PHP_FUNCTION(xmlwriter_start_element_ns)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs!ss!", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs!ss!", &pind,
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -995,9 +1010,9 @@ static PHP_FUNCTION(xmlwriter_start_element_ns)
 		if (retval != -1) {
 			RETURN_TRUE;
 		}
-		
+
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1029,7 +1044,7 @@ static PHP_FUNCTION(xmlwriter_write_element)
 	size_t name_len, content_len;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|s!",
 			&name, &name_len, &content, &content_len) == FAILURE) {
@@ -1037,11 +1052,13 @@ static PHP_FUNCTION(xmlwriter_write_element)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs|s!", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs|s!", &pind,
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -1065,7 +1082,7 @@ static PHP_FUNCTION(xmlwriter_write_element)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1081,19 +1098,21 @@ static PHP_FUNCTION(xmlwriter_write_element_ns)
 	size_t name_len, prefix_len, uri_len, content_len;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "s!ss!|s!", 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "s!ss!|s!",
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len, &content, &content_len) == FAILURE) {
 			return;
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs!ss!|s!", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs!ss!|s!", &pind,
 			&prefix, &prefix_len, &name, &name_len, &uri, &uri_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -1117,7 +1136,7 @@ static PHP_FUNCTION(xmlwriter_write_element_ns)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1150,7 +1169,7 @@ static PHP_FUNCTION(xmlwriter_write_pi)
 	int retval;
 
 	zval *self = getThis();
-	
+
 	if (self) {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss",
 			&name, &name_len, &content, &content_len) == FAILURE) {
@@ -1158,11 +1177,13 @@ static PHP_FUNCTION(xmlwriter_write_pi)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind,
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid PI Target");
@@ -1175,7 +1196,7 @@ static PHP_FUNCTION(xmlwriter_write_pi)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1189,14 +1210,16 @@ static PHP_FUNCTION(xmlwriter_start_cdata)
 	xmlTextWriterPtr ptr;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "r", &pind) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	ptr = intern->ptr;
@@ -1207,7 +1230,7 @@ static PHP_FUNCTION(xmlwriter_start_cdata)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1254,14 +1277,16 @@ static PHP_FUNCTION(xmlwriter_start_comment)
 	xmlTextWriterPtr ptr;
 	int retval;
 	zval *self = getThis();
-	
+
 	if (self) {
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "r", &pind) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	ptr = intern->ptr;
@@ -1272,7 +1297,7 @@ static PHP_FUNCTION(xmlwriter_start_comment)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1317,7 +1342,9 @@ static PHP_FUNCTION(xmlwriter_start_document)
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "r|s!s!s!", &pind, &version, &version_len, &enc, &enc_len, &alone, &alone_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	ptr = intern->ptr;
@@ -1328,7 +1355,7 @@ static PHP_FUNCTION(xmlwriter_start_document)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1363,8 +1390,9 @@ static PHP_FUNCTION(xmlwriter_start_dtd)
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs|s!s!", &pind, &name, &name_len, &pubid, &pubid_len, &sysid, &sysid_len) == FAILURE) {
 			return;
 		}
-	
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 	ptr = intern->ptr;
 
@@ -1374,7 +1402,7 @@ static PHP_FUNCTION(xmlwriter_start_dtd)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1409,8 +1437,10 @@ static PHP_FUNCTION(xmlwriter_write_dtd)
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rs|s!s!s!", &pind, &name, &name_len, &pubid, &pubid_len, &sysid, &sysid_len, &subset, &subset_len) == FAILURE) {
 			return;
 		}
-	
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	ptr = intern->ptr;
@@ -1421,7 +1451,7 @@ static PHP_FUNCTION(xmlwriter_write_dtd)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1460,11 +1490,13 @@ static PHP_FUNCTION(xmlwriter_write_dtd_element)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind,
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -1477,7 +1509,7 @@ static PHP_FUNCTION(xmlwriter_write_dtd_element)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1518,11 +1550,13 @@ static PHP_FUNCTION(xmlwriter_write_dtd_attlist)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss", &pind,
 			&name, &name_len, &content, &content_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -1535,7 +1569,7 @@ static PHP_FUNCTION(xmlwriter_write_dtd_attlist)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1548,7 +1582,8 @@ static PHP_FUNCTION(xmlwriter_start_dtd_entity)
 	xmlwriter_object *intern;
 	xmlTextWriterPtr ptr;
 	char *name;
-	size_t name_len, retval;
+	size_t name_len;
+	int retval;
 	zend_bool isparm;
 	zval *self = getThis();
 
@@ -1561,7 +1596,9 @@ static PHP_FUNCTION(xmlwriter_start_dtd_entity)
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rsb", &pind, &name, &name_len, &isparm) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Attribute Name");
@@ -1574,7 +1611,7 @@ static PHP_FUNCTION(xmlwriter_start_dtd_entity)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -1587,7 +1624,7 @@ static PHP_FUNCTION(xmlwriter_end_dtd_entity)
 }
 /* }}} */
 
-/* {{{ proto bool xmlwriter_write_dtd_entity(resource xmlwriter, string name, string content [, int pe [, string pubid [, string sysid [, string ndataid]]]])
+/* {{{ proto bool xmlwriter_write_dtd_entity(resource xmlwriter, string name, string content [, bool pe [, string pubid [, string sysid [, string ndataid]]]])
 Write full DTD Entity tag - returns FALSE on error */
 static PHP_FUNCTION(xmlwriter_write_dtd_entity)
 {
@@ -1611,12 +1648,14 @@ static PHP_FUNCTION(xmlwriter_write_dtd_entity)
 		}
 		XMLWRITER_FROM_OBJECT(intern, self);
 	} else {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss|bsss", &pind, 
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "rss|bsss", &pind,
 			&name, &name_len, &content, &content_len, &pe, &pubid, &pubid_len,
 			&sysid, &sysid_len, &ndataid, &ndataid_len) == FAILURE) {
 			return;
 		}
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 
 	XMLW_NAME_CHK("Invalid Element Name");
@@ -1629,13 +1668,13 @@ static PHP_FUNCTION(xmlwriter_write_dtd_entity)
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 #endif
 
-/* {{{ proto resource xmlwriter_open_uri(resource xmlwriter, string source)
+/* {{{ proto resource xmlwriter_open_uri(string source)
 Create new xmlwriter using source uri for output */
 static PHP_FUNCTION(xmlwriter_open_uri)
 {
@@ -1648,13 +1687,13 @@ static PHP_FUNCTION(xmlwriter_open_uri)
 	zval *self = getThis();
 	ze_xmlwriter_object *ze_obj = NULL;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &source, &source_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &source, &source_len) == FAILURE) {
 		return;
 	}
-	
+
 	if (self) {
 		/* We do not use XMLWRITER_FROM_OBJECT, xmlwriter init function here */
-		ze_obj = Z_XMLWRITER_P(self); 
+		ze_obj = Z_XMLWRITER_P(self);
 	}
 
 	if (source_len == 0) {
@@ -1684,7 +1723,7 @@ static PHP_FUNCTION(xmlwriter_open_uri)
 		ze_obj->xmlwriter_ptr = intern;
 		RETURN_TRUE;
 	} else {
-		ZEND_REGISTER_RESOURCE(return_value,intern,le_xmlwriter);
+		RETURN_RES(zend_register_resource(intern, le_xmlwriter));
 	}
 }
 /* }}} */
@@ -1727,7 +1766,7 @@ static PHP_FUNCTION(xmlwriter_open_memory)
 		ze_obj->xmlwriter_ptr = intern;
 		RETURN_TRUE;
 	} else {
-		ZEND_REGISTER_RESOURCE(return_value,intern,le_xmlwriter);
+		RETURN_RES(zend_register_resource(intern, le_xmlwriter));
 	}
 
 }
@@ -1753,7 +1792,9 @@ static void php_xmlwriter_flush(INTERNAL_FUNCTION_PARAMETERS, int force_string) 
 			return;
 		}
 
-		ZEND_FETCH_RESOURCE(intern, xmlwriter_object *, pind, -1, "XMLWriter", le_xmlwriter);
+		if ((intern = (xmlwriter_object *)zend_fetch_resource(Z_RES_P(pind), "XMLWriter", le_xmlwriter)) == NULL) {
+			RETURN_FALSE;
+		}
 	}
 	ptr = intern->ptr;
 
@@ -1773,7 +1814,7 @@ static void php_xmlwriter_flush(INTERNAL_FUNCTION_PARAMETERS, int force_string) 
 		}
 		return;
 	}
-	
+
 	RETURN_EMPTY_STRING();
 }
 /* }}} */
